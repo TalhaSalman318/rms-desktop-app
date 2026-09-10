@@ -251,9 +251,44 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
               ...cats.map(
                 (c) => ListTile(
                   title: Text(c.name),
-                  trailing: IconButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    icon: const Icon(Icons.edit_outlined),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          await _editCategory(c);
+                        },
+                        icon: const Icon(Icons.edit_outlined),
+                      ),
+                      IconButton(
+                        onPressed: () async {
+                          if (await showConfirmationDialog(
+                            context,
+                            title: 'Delete ${c.name}?',
+                            message:
+                                'This category can only be deleted if unused.',
+                          )) {
+                            try {
+                              await widget.repository.deleteCategory(c);
+                              if (ctx.mounted) Navigator.pop(ctx);
+                              await load();
+                            } on ExpenseCategoryInUseException {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'This category is used by an expense.',
+                                    ),
+                                  ),
+                                );
+                              }
+                            }
+                          }
+                        },
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -272,7 +307,23 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
               try {
                 await widget.repository.saveCategory(name.text);
                 if (ctx.mounted) Navigator.pop(ctx);
-              } catch (_) {}
+              } on ExpenseDuplicateException {
+                if (ctx.mounted) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'A category with this name already exists.',
+                      ),
+                    ),
+                  );
+                }
+              } on ExpenseValidationException catch (error) {
+                if (ctx.mounted) {
+                  ScaffoldMessenger.of(
+                    ctx,
+                  ).showSnackBar(SnackBar(content: Text(error.message)));
+                }
+              }
             },
           ),
         ],
@@ -280,6 +331,47 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
     );
     name.dispose();
     load();
+  }
+
+  Future<void> _editCategory(ExpenseCategory category) async {
+    final controller = TextEditingController(text: category.name);
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Edit expense category'),
+        content: TextField(controller: controller),
+        actions: [
+          SecondaryButton(
+            label: 'Cancel',
+            onPressed: () => Navigator.pop(dialogContext),
+          ),
+          PrimaryButton(
+            label: 'Save',
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (value == null) return;
+    try {
+      await widget.repository.saveCategory(value, existing: category);
+      await load();
+    } on ExpenseDuplicateException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('A category with this name already exists.'),
+          ),
+        );
+      }
+    } on ExpenseValidationException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
   }
 
   Future<void> _expenseDialog([Expense? existing]) async {
@@ -332,11 +424,14 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                   controller: desc,
                   decoration: const InputDecoration(labelText: 'Description'),
                 ),
-                TextField(
+                TextFormField(
                   controller: date,
                   decoration: const InputDecoration(
                     labelText: 'Date (YYYY-MM-DD)',
                   ),
+                  validator: (value) => DateTime.tryParse(value ?? '') == null
+                      ? 'Enter a valid date.'
+                      : null,
                 ),
               ],
             ),
@@ -359,7 +454,13 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                     date: date.text,
                   );
                   if (ctx.mounted) Navigator.pop(ctx, true);
-                } catch (_) {}
+                } on ExpenseValidationException catch (error) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(
+                      ctx,
+                    ).showSnackBar(SnackBar(content: Text(error.message)));
+                  }
+                }
               },
             ),
           ],

@@ -13,6 +13,12 @@ class CalendarDay {
   bool get hasData => orders > 0 || expenses > 0;
 }
 
+class CalendarDetails {
+  const CalendarDetails({required this.orders, required this.expenses});
+  final List<Map<String, Object?>> orders;
+  final List<Map<String, Object?>> expenses;
+}
+
 class CalendarRepository {
   CalendarRepository(this.db);
   final DatabaseService db;
@@ -50,5 +56,20 @@ class CalendarRepository {
       );
     }
     return result;
+  }
+
+  Future<CalendarDetails> details(DateTime date) async {
+    final start = DateTime(date.year, date.month, date.day);
+    final end = start.add(const Duration(days: 1));
+    final database = await db.open();
+    final orders = await database.rawQuery(
+      "SELECT order_number,total_amount,payment_method,status FROM orders WHERE order_date >= ? AND order_date < ? ORDER BY order_date DESC",
+      [start.toIso8601String(), end.toIso8601String()],
+    );
+    final expenses = await database.rawQuery(
+      'SELECT ec.name, e.amount, e.description FROM expenses e JOIN expense_categories ec ON ec.id=e.expense_category_id WHERE e.expense_date >= ? AND e.expense_date < ? ORDER BY e.expense_date DESC',
+      [start.toIso8601String(), end.toIso8601String()],
+    );
+    return CalendarDetails(orders: orders, expenses: expenses);
   }
 }

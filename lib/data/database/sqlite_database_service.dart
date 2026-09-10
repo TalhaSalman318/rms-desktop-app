@@ -18,6 +18,9 @@ class SqliteDatabaseService implements DatabaseService {
   final String? _databasePath;
   Database? _database;
 
+  Future<String> databasePath() async =>
+      _databasePath ?? await _defaultDatabasePath();
+
   @override
   Future<Database> open() async {
     if (_database != null && _database!.isOpen) {
@@ -25,7 +28,7 @@ class SqliteDatabaseService implements DatabaseService {
     }
 
     sqfliteFfiInit();
-    final databasePath = _databasePath ?? await _defaultDatabasePath();
+    final databasePath = await this.databasePath();
     try {
       _database = await databaseFactoryFfi.openDatabase(
         databasePath,

@@ -164,7 +164,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
               const SizedBox(height: 16),
               ...items.map(
                 (item) => Text(
-                  'Product #${item.productId}   ${item.quantity} × Rs. ${item.unitPrice.toStringAsFixed(2)} = Rs. ${item.subtotal.toStringAsFixed(2)}',
+                  '${item.dealName ?? 'Product #${item.productId}'}   ${item.quantity} × Rs. ${item.unitPrice.toStringAsFixed(2)} = Rs. ${item.subtotal.toStringAsFixed(2)}',
                 ),
               ),
               const Divider(),

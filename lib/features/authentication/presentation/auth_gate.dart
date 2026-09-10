@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../data/database/sqlite_database_service.dart';
+import '../../../core/services/backup_service.dart';
 import '../../../shared/widgets/app_shell.dart';
 import '../../../shared/widgets/ui_components.dart';
 import '../data/authentication_service.dart';
@@ -38,6 +39,7 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
+  late final SqliteDatabaseService _database;
   late final AuthenticationController _controller;
   late final CategoryController _categoryController;
   late final ProductController _productController;
@@ -48,25 +50,26 @@ class _AuthGateState extends State<AuthGate> {
   late final DealRepository _dealRepository;
   late final ReportRepository _reportRepository;
   late final CalendarRepository _calendarRepository;
+  int _workspaceGeneration = 0;
 
   @override
   void initState() {
     super.initState();
-    final database = widget.databaseService ?? SqliteDatabaseService.instance;
-    _controller = AuthenticationController(AuthenticationService(database));
-    _categoryController = CategoryController(CategoryRepository(database));
-    _productController = ProductController(ProductRepository(database));
-    _orderRepository = OrderRepository(database);
+    _database = widget.databaseService ?? SqliteDatabaseService.instance;
+    _controller = AuthenticationController(AuthenticationService(_database));
+    _categoryController = CategoryController(CategoryRepository(_database));
+    _productController = ProductController(ProductRepository(_database));
+    _orderRepository = OrderRepository(_database);
     _posController = PosController(
-      ProductRepository(database),
+      ProductRepository(_database),
       _orderRepository,
-      DealRepository(database),
+      DealRepository(_database),
     );
-    _dashboardRepository = DashboardRepository(database);
-    _expenseRepository = ExpenseRepository(database);
-    _dealRepository = DealRepository(database);
-    _reportRepository = ReportRepository(database);
-    _calendarRepository = CalendarRepository(database);
+    _dashboardRepository = DashboardRepository(_database);
+    _expenseRepository = ExpenseRepository(_database);
+    _dealRepository = DealRepository(_database);
+    _reportRepository = ReportRepository(_database);
+    _calendarRepository = CalendarRepository(_database);
     _controller.initialize();
   }
 
@@ -93,6 +96,7 @@ class _AuthGateState extends State<AuthGate> {
           return LoginScreen(controller: _controller);
         }
         return AppShell(
+          key: ValueKey(_workspaceGeneration),
           onLogout: _logout,
           pages: {
             AppShell.dashboardRoute: DashboardScreen(
@@ -100,6 +104,8 @@ class _AuthGateState extends State<AuthGate> {
             ),
             AppShell.settingsRoute: ChangePasswordScreen(
               controller: _controller,
+              backupService: LocalBackupService(_database),
+              onDatabaseRestored: _handleDatabaseRestored,
             ),
             AppShell.categoriesRoute: CategoryScreen(
               controller: _categoryController,
@@ -114,9 +120,7 @@ class _AuthGateState extends State<AuthGate> {
             ),
             AppShell.dealsRoute: DealScreen(
               repository: _dealRepository,
-              products: ProductRepository(
-                widget.databaseService ?? SqliteDatabaseService.instance,
-              ),
+              products: ProductRepository(_database),
             ),
             AppShell.reportsRoute: ReportsScreen(repository: _reportRepository),
             AppShell.calendarRoute: CalendarScreen(
@@ -135,5 +139,10 @@ class _AuthGateState extends State<AuthGate> {
       message: 'Your local data will remain safely stored on this device.',
     );
     if (confirmed) _controller.logout();
+  }
+
+  void _handleDatabaseRestored() {
+    _posController.resetAfterDatabaseRestore();
+    setState(() => _workspaceGeneration++);
   }
 }

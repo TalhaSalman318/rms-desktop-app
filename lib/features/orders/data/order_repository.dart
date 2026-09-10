@@ -26,17 +26,35 @@ class OrderRepository {
     }
     return _database.transaction((transaction) async {
       final ids = lines
-          .where((line) => line.product != null)
-          .map((line) => line.product!.id)
+          .expand(
+            (line) => line.product != null
+                ? [line.product!.id]
+                : line.deal!.items.map((item) => item.productId),
+          )
           .toList();
-      final fresh = await transaction.rawQuery(
-        'SELECT * FROM products WHERE id IN (${List.filled(ids.length, '?').join(',')}) AND is_active = 1',
-        ids,
-      );
-      if (fresh.length != lines.where((line) => line.product != null).length) {
+      final fresh = ids.isEmpty
+          ? <Map<String, Object?>>[]
+          : await transaction.rawQuery(
+              'SELECT * FROM products WHERE id IN (${List.filled(ids.length, '?').join(',')}) AND is_active = 1',
+              ids,
+            );
+      if (fresh.length != ids.toSet().length) {
         throw const OrderValidationException(
           'One or more products are no longer available.',
         );
+      }
+      for (final line in lines.where((line) => line.deal != null)) {
+        final dealRows = await transaction.query(
+          'deals',
+          where: 'id = ? AND is_active = 1',
+          whereArgs: [line.deal!.deal.id],
+          limit: 1,
+        );
+        if (dealRows.isEmpty) {
+          throw const OrderValidationException(
+            'One or more deals are no longer available.',
+          );
+        }
       }
       final byId = {
         for (final row in fresh) row['id'] as int: Product.fromMap(row),

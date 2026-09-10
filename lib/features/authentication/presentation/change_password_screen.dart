@@ -1,12 +1,21 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/services/backup_service.dart';
 import '../../../shared/widgets/ui_components.dart';
 import 'authentication_controller.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
-  const ChangePasswordScreen({super.key, required this.controller});
+  const ChangePasswordScreen({
+    super.key,
+    required this.controller,
+    this.backupService,
+    this.onDatabaseRestored,
+  });
 
   final AuthenticationController controller;
+  final BackupService? backupService;
+  final VoidCallback? onDatabaseRestored;
 
   @override
   State<ChangePasswordScreen> createState() => _ChangePasswordScreenState();
@@ -18,6 +27,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   final _newController = TextEditingController();
   final _confirmController = TextEditingController();
   bool _saving = false;
+  bool _backupBusy = false;
 
   @override
   void dispose() {
@@ -121,6 +131,34 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                       icon: Icons.check_rounded,
                       onPressed: _saving ? null : _save,
                     ),
+                    if (widget.backupService != null) ...[
+                      const Divider(height: 40),
+                      Text(
+                        'Database backup',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Export a copy of the local SQLite database or restore a validated backup.',
+                      ),
+                      const SizedBox(height: 18),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          PrimaryButton(
+                            label: 'Backup database',
+                            icon: Icons.download_rounded,
+                            onPressed: _backupBusy ? null : _backup,
+                          ),
+                          SecondaryButton(
+                            label: 'Restore database',
+                            icon: Icons.restore_rounded,
+                            onPressed: _backupBusy ? null : _restore,
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -129,5 +167,56 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _backup() async {
+    final destination = await FilePicker.platform.saveFile(
+      dialogTitle: 'Save database backup',
+      fileName: 'restaurant_management_backup.db',
+      type: FileType.custom,
+      allowedExtensions: ['db', 'sqlite'],
+    );
+    if (destination == null || widget.backupService == null) return;
+    setState(() => _backupBusy = true);
+    try {
+      await widget.backupService!.createBackup(destination);
+      if (mounted) _message('Database backup created.');
+    } catch (error) {
+      if (mounted) _message('Backup failed: $error');
+    } finally {
+      if (mounted) setState(() => _backupBusy = false);
+    }
+  }
+
+  Future<void> _restore() async {
+    final picked = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Choose database backup',
+      type: FileType.custom,
+      allowedExtensions: ['db', 'sqlite'],
+    );
+    final source = picked?.files.single.path;
+    if (!mounted || source == null || widget.backupService == null) return;
+    final confirmed = await showConfirmationDialog(
+      context,
+      title: 'Restore database?',
+      message: 'This replaces the current local data with the selected backup.',
+    );
+    if (!confirmed) return;
+    setState(() => _backupBusy = true);
+    try {
+      await widget.backupService!.restoreBackup(source);
+      widget.onDatabaseRestored?.call();
+      if (mounted) _message('Database restored successfully.');
+    } catch (error) {
+      if (mounted) _message('Restore failed: $error');
+    } finally {
+      if (mounted) setState(() => _backupBusy = false);
+    }
+  }
+
+  void _message(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }

@@ -15,6 +15,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
   DateTime focused = DateTime.now();
   DateTime selected = DateTime.now();
   Map<DateTime, CalendarDay> days = {};
+  CalendarDetails details = const CalendarDetails(orders: [], expenses: []);
   bool loading = true;
   @override
   void initState() {
@@ -25,6 +26,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Future<void> load() async {
     setState(() => loading = true);
     days = await widget.repository.month(focused);
+    details = await widget.repository.details(selected);
     if (mounted) setState(() => loading = false);
   }
 
@@ -54,11 +56,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           focusedDay: focused,
                           selectedDayPredicate: (day) =>
                               isSameDay(day, selected),
-                          onDaySelected: (day, focus) => setState(() {
-                            selected = day;
-                            focused = focus;
-                          }),
+                          onDaySelected: (day, focus) async {
+                            setState(() {
+                              selected = day;
+                              focused = focus;
+                            });
+                            final value = await widget.repository.details(day);
+                            if (mounted) setState(() => details = value);
+                          },
                           onPageChanged: (day) {
+                            selected = DateTime(day.year, day.month, 1);
                             focused = day;
                             load();
                           },
@@ -105,6 +112,26 @@ class _CalendarScreenState extends State<CalendarScreen> {
           'Profit: Rs. ${selectedData.profit.toStringAsFixed(2)}',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
+        const Divider(height: 28),
+        Text('Orders', style: Theme.of(context).textTheme.titleMedium),
+        if (details.orders.isEmpty)
+          const Text('No orders')
+        else
+          ...details.orders.map(
+            (order) => Text(
+              '#${order['order_number']}  Rs. ${(order['total_amount'] as num).toStringAsFixed(2)} (${order['status']})',
+            ),
+          ),
+        const SizedBox(height: 12),
+        Text('Expenses', style: Theme.of(context).textTheme.titleMedium),
+        if (details.expenses.isEmpty)
+          const Text('No expenses')
+        else
+          ...details.expenses.map(
+            (expense) => Text(
+              '${expense['name']}: Rs. ${(expense['amount'] as num).toStringAsFixed(2)}',
+            ),
+          ),
       ],
     ),
   );

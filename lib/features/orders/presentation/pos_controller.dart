@@ -101,6 +101,17 @@ class PosController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void resetAfterDatabaseRestore() {
+    available = const [];
+    deals = const [];
+    cart.clear();
+    search = '';
+    categoryId = null;
+    discount = 0;
+    error = null;
+    notifyListeners();
+  }
+
   void setDiscount(double value) {
     discount = value.clamp(0, subtotal);
     notifyListeners();

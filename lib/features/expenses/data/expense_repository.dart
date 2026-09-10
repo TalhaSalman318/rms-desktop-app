@@ -90,11 +90,22 @@ class ExpenseRepository {
         'Amount must be greater than zero.',
       );
     }
+    final parsedDate = DateTime.tryParse(date.trim());
+    if (parsedDate == null) {
+      throw const ExpenseValidationException(
+        'Use a valid date in YYYY-MM-DD format.',
+      );
+    }
+    final normalizedDate = DateTime(
+      parsedDate.year,
+      parsedDate.month,
+      parsedDate.day,
+    ).toIso8601String();
     final values = {
       'expense_category_id': categoryId,
       'amount': amount,
       'description': description.trim(),
-      'expense_date': date,
+      'expense_date': normalizedDate,
     };
     if (existing == null) {
       final id = await _database.insert('expenses', values);
@@ -103,7 +114,7 @@ class ExpenseRepository {
         expenseCategoryId: categoryId,
         amount: amount,
         description: description.trim(),
-        expenseDate: date,
+        expenseDate: normalizedDate,
       );
     }
     await _database.update(
@@ -117,7 +128,7 @@ class ExpenseRepository {
       expenseCategoryId: categoryId,
       amount: amount,
       description: description.trim(),
-      expenseDate: date,
+      expenseDate: normalizedDate,
       createdAt: existing.createdAt,
     );
   }
@@ -125,6 +136,23 @@ class ExpenseRepository {
   Future<void> delete(Expense expense) => _database
       .delete('expenses', where: 'id=?', whereArgs: [expense.id])
       .then((_) {});
+
+  Future<void> deleteCategory(ExpenseCategory category) async {
+    final used = await _database.query(
+      'expenses',
+      columns: ['id'],
+      where: 'expense_category_id=?',
+      whereArgs: [category.id],
+      limit: 1,
+    );
+    if (used.isNotEmpty) throw const ExpenseCategoryInUseException();
+    await _database.delete(
+      'expense_categories',
+      where: 'id=?',
+      whereArgs: [category.id],
+    );
+  }
+
   Future<double> total({required DateTime from, required DateTime to}) async {
     final rows = await _database.open().then(
       (db) => db.rawQuery(
@@ -143,4 +171,8 @@ class ExpenseValidationException implements Exception {
 
 class ExpenseDuplicateException implements Exception {
   const ExpenseDuplicateException();
+}
+
+class ExpenseCategoryInUseException implements Exception {
+  const ExpenseCategoryInUseException();
 }

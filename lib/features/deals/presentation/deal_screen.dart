@@ -102,6 +102,11 @@ class _DealScreenState extends State<DealScreen> {
               onPressed: () => _edit(deal),
               icon: const Icon(Icons.edit_outlined),
             ),
+            IconButton(
+              tooltip: 'Delete deal',
+              onPressed: () => _delete(deal),
+              icon: const Icon(Icons.delete_outline),
+            ),
           ],
         ),
       ),
@@ -127,6 +132,7 @@ class _DealScreenState extends State<DealScreen> {
       }
     }
     if (!mounted) return;
+    String? validationError;
     final saved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -159,22 +165,63 @@ class _DealScreenState extends State<DealScreen> {
                       alignment: Alignment.centerLeft,
                       child: Text('Select products'),
                     ),
-                    ...products.map(
-                      (product) => CheckboxListTile(
+                    ...products.map((product) {
+                      final quantity = selected[product.id] ?? 0;
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Checkbox(
+                          value: quantity > 0,
+                          onChanged: (checked) {
+                            setDialogState(() {
+                              if (checked == true) {
+                                selected[product.id!] = quantity == 0
+                                    ? 1
+                                    : quantity;
+                              } else {
+                                selected.remove(product.id);
+                              }
+                            });
+                          },
+                        ),
                         title: Text(product.name),
-                        value: selected.containsKey(product.id),
-                        onChanged: (checked) {
-                          setDialogState(() {
-                            if (checked == true) {
-                              selected[product.id!] =
-                                  selected[product.id!] ?? 1;
-                            } else {
-                              selected.remove(product.id);
-                            }
-                          });
-                        },
+                        trailing: quantity == 0
+                            ? null
+                            : Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    onPressed: () => setDialogState(() {
+                                      if (quantity <= 1) {
+                                        selected.remove(product.id);
+                                      } else {
+                                        selected[product.id!] = quantity - 1;
+                                      }
+                                    }),
+                                    icon: const Icon(
+                                      Icons.remove_circle_outline,
+                                    ),
+                                  ),
+                                  Text('$quantity'),
+                                  IconButton(
+                                    onPressed: () => setDialogState(() {
+                                      selected[product.id!] = quantity + 1;
+                                    }),
+                                    icon: const Icon(Icons.add_circle_outline),
+                                  ),
+                                ],
+                              ),
+                      );
+                    }),
+                    if (validationError != null)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          validationError!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -193,6 +240,10 @@ class _DealScreenState extends State<DealScreen> {
                       dealValue <= 0 ||
                       dealValue > normalValue ||
                       selected.isEmpty) {
+                    setDialogState(
+                      () => validationError =
+                          'Enter valid prices and select products.',
+                    );
                     return;
                   }
                   final deal = Deal(
@@ -213,8 +264,14 @@ class _DealScreenState extends State<DealScreen> {
                         ),
                       )
                       .toList();
-                  await widget.repository.save(deal, items);
-                  if (dialogContext.mounted) Navigator.pop(dialogContext, true);
+                  try {
+                    await widget.repository.save(deal, items);
+                    if (dialogContext.mounted) {
+                      Navigator.pop(dialogContext, true);
+                    }
+                  } on DealValidationException catch (error) {
+                    setDialogState(() => validationError = error.message);
+                  }
                 },
               ),
             ],
@@ -226,5 +283,17 @@ class _DealScreenState extends State<DealScreen> {
     normal.dispose();
     price.dispose();
     if (saved == true) load();
+  }
+
+  Future<void> _delete(Deal deal) async {
+    if (!await showConfirmationDialog(
+      context,
+      title: 'Delete ${deal.name}?',
+      message: 'This removes the deal from future POS orders.',
+    )) {
+      return;
+    }
+    await widget.repository.delete(deal);
+    await load();
   }
 }
