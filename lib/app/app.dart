@@ -12,7 +12,7 @@ class RestaurantApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Restaurant Management & POS',
+      title: 'Grillix Restaurant Management & POS',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark(),
       home: AuthGate(databaseService: databaseService),

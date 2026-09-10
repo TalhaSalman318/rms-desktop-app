@@ -1,13 +1,28 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppTheme {
-  static const background = Color(0xFF17110E);
-  static const surface = Color(0xFF241A15);
-  static const surfaceRaised = Color(0xFF30221B);
-  static const accent = Color(0xFFE97835);
-  static const textPrimary = Color(0xFFF8F1EB);
-  static const textSecondary = Color(0xFFB9AAA0);
-  static const border = Color(0xFF433229);
+  static const background = Color(0xFF090909);
+  static const surface = Color(0xFF171312);
+  static const surfaceRaised = Color(0xFF28201B);
+  static const accent = Color(0xFFF04419);
+  static const flameOrange = Color(0xFFFF7A00);
+  static const flameYellow = Color(0xFFFFC928);
+  static const cream = Color(0xFFFFF2D4);
+  static const textPrimary = Color(0xFFFFF7E8);
+  static const textSecondary = Color(0xFFC7B8A5);
+  static const border = Color(0xFF4B3022);
+
+  static const appGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF090909), Color(0xFF21110B), Color(0xFF0D0B0A)],
+  );
+
+  static const flameGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [accent, flameOrange, flameYellow],
+  );
 
   static ThemeData dark() {
     return ThemeData(
@@ -16,10 +31,10 @@ abstract final class AppTheme {
       colorScheme: const ColorScheme.dark(
         primary: accent,
         onPrimary: Colors.white,
-        secondary: Color(0xFFF2A36B),
+        secondary: flameOrange,
         surface: surface,
         onSurface: textPrimary,
-        error: Color(0xFFE57373),
+        error: Color(0xFFFF8A65),
       ),
       useMaterial3: true,
       fontFamily: 'Segoe UI',
@@ -61,6 +76,10 @@ abstract final class AppTheme {
           fontWeight: FontWeight.w700,
         ),
         bodyMedium: TextStyle(color: textSecondary, fontSize: 14),
+      ),
+      dividerTheme: const DividerThemeData(color: border),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: flameOrange,
       ),
     );
   }

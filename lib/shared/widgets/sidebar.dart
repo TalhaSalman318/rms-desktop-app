@@ -33,7 +33,14 @@ class Sidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: compact ? 84 : 240,
-      color: AppTheme.surface,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF1B100C), Color(0xFF0B0A09)],
+        ),
+        border: Border(right: BorderSide(color: AppTheme.border)),
+      ),
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 12 : 18,
         vertical: 22,
@@ -156,16 +163,16 @@ class _Brand extends StatelessWidget {
         Container(
           width: 38,
           height: 38,
-          decoration: BoxDecoration(
-            color: AppTheme.accent,
-            borderRadius: BorderRadius.circular(12),
+          clipBehavior: Clip.antiAlias,
+          decoration: const BoxDecoration(
+            borderRadius: BorderRadius.all(Radius.circular(12)),
           ),
-          child: const Icon(Icons.restaurant_rounded, color: Colors.white),
+          child: Image.asset('assets/logo.jpeg', fit: BoxFit.cover),
         ),
         if (!compact) ...[
           const SizedBox(width: 12),
           const Text(
-            'SAVOR',
+            'GRILLIX',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w800,

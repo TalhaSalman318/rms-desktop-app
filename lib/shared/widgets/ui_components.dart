@@ -49,8 +49,8 @@ class SecondaryButton extends StatelessWidget {
       icon: Icon(icon ?? Icons.tune_rounded, size: 18),
       label: Text(label),
       style: OutlinedButton.styleFrom(
-        foregroundColor: AppTheme.textPrimary,
-        side: const BorderSide(color: AppTheme.border),
+        foregroundColor: AppTheme.cream,
+        side: const BorderSide(color: AppTheme.flameOrange),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
@@ -138,7 +138,17 @@ class AppCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: Padding(padding: padding, child: child),
+      clipBehavior: Clip.antiAlias,
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [AppTheme.surfaceRaised, AppTheme.surface],
+          ),
+        ),
+        child: Padding(padding: padding, child: child),
+      ),
     );
   }
 }

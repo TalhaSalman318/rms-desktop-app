@@ -35,28 +35,31 @@ class _AppShellState extends State<AppShell> {
         widget.pages[_selectedRoute] ??
         SectionPlaceholder(title: '$_selectedRoute is coming soon');
 
-    return Scaffold(
-      body: SafeArea(
-        child: Row(
-          children: [
-            Sidebar(
-              selectedRoute: _selectedRoute,
-              compact: isCompact,
-              onLogout: widget.onLogout,
-              onRouteSelected: (route) {
-                setState(() => _selectedRoute = route);
-              },
-            ),
-            Expanded(
-              child: Column(
-                children: [
-                  _TopBar(compact: isCompact),
-                  Expanded(child: page),
-                ],
-              ),
-            ),
-          ],
+    final content = Row(
+      children: [
+        Sidebar(
+          selectedRoute: _selectedRoute,
+          compact: isCompact,
+          onLogout: widget.onLogout,
+          onRouteSelected: (route) {
+            setState(() => _selectedRoute = route);
+          },
         ),
+        Expanded(
+          child: Column(
+            children: [
+              _TopBar(compact: isCompact),
+              Expanded(child: page),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    return Scaffold(
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: AppTheme.appGradient),
+        child: SafeArea(child: content),
       ),
     );
   }
