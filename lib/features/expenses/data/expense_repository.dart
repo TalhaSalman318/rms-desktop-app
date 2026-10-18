@@ -1,12 +1,11 @@
-import '../../../core/database/database_service.dart';
+import '../../../core/services/api_client.dart';
 import '../../../data/models/database_models.dart';
 
 class ExpenseRepository {
-  ExpenseRepository(this._database);
-  final DatabaseService _database;
-  Future<List<ExpenseCategory>> categories() async => (await _database.query(
+  ExpenseRepository(this._api);
+  final ApiClient _api;
+  Future<List<ExpenseCategory>> categories() async => (await _api.list(
     'expense_categories',
-    orderBy: 'name COLLATE NOCASE',
   )).map(ExpenseCategory.fromMap).toList();
   Future<ExpenseCategory> saveCategory(
     String name, {
@@ -16,32 +15,8 @@ class ExpenseRepository {
     if (value.isEmpty) {
       throw const ExpenseValidationException('Enter a category name.');
     }
-    final rows = await _database.query(
-      'expense_categories',
-      columns: ['id'],
-      where: existing == null
-          ? 'LOWER(name)=LOWER(?)'
-          : 'LOWER(name)=LOWER(?) AND id != ?',
-      whereArgs: existing == null ? [value] : [value, existing.id],
-      limit: 1,
-    );
-    if (rows.isNotEmpty) {
-      throw const ExpenseDuplicateException();
-    }
-    if (existing == null) {
-      final id = await _database.insert('expense_categories', {'name': value});
-      return ExpenseCategory(id: id, name: value);
-    }
-    await _database.update(
-      'expense_categories',
-      {'name': value},
-      where: 'id=?',
-      whereArgs: [existing.id],
-    );
-    return ExpenseCategory(
-      id: existing.id,
-      name: value,
-      createdAt: existing.createdAt,
+    return ExpenseCategory.fromMap(
+      await _api.save('expense_categories', {'name': value}, id: existing?.id),
     );
   }
 
@@ -51,31 +26,15 @@ class ExpenseRepository {
     DateTime? from,
     DateTime? to,
   }) async {
-    final where = <String>[];
-    final args = <Object?>[];
-    if (search.trim().isNotEmpty) {
-      where.add('description LIKE ?');
-      args.add('%${search.trim()}%');
-    }
-    if (categoryId != null) {
-      where.add('expense_category_id=?');
-      args.add(categoryId);
-    }
-    if (from != null) {
-      where.add('expense_date >= ?');
-      args.add(from.toIso8601String());
-    }
-    if (to != null) {
-      where.add('expense_date < ?');
-      args.add(to.toIso8601String());
-    }
-    final rows = await _database.query(
+    final query = <String, String>{};
+    if (search.trim().isNotEmpty) query['search'] = search.trim();
+    if (categoryId != null) query['category_id'] = '$categoryId';
+    if (from != null) query['from'] = from.toIso8601String();
+    if (to != null) query['to'] = to.toIso8601String();
+    return (await _api.list(
       'expenses',
-      where: where.isEmpty ? null : where.join(' AND '),
-      whereArgs: args,
-      orderBy: 'expense_date DESC',
-    );
-    return rows.map(Expense.fromMap).toList();
+      query: query,
+    )).map(Expense.fromMap).toList();
   }
 
   Future<Expense> save({
@@ -107,60 +66,21 @@ class ExpenseRepository {
       'description': description.trim(),
       'expense_date': normalizedDate,
     };
-    if (existing == null) {
-      final id = await _database.insert('expenses', values);
-      return Expense(
-        id: id,
-        expenseCategoryId: categoryId,
-        amount: amount,
-        description: description.trim(),
-        expenseDate: normalizedDate,
-      );
-    }
-    await _database.update(
-      'expenses',
-      values,
-      where: 'id=?',
-      whereArgs: [existing.id],
-    );
-    return Expense(
-      id: existing.id,
-      expenseCategoryId: categoryId,
-      amount: amount,
-      description: description.trim(),
-      expenseDate: normalizedDate,
-      createdAt: existing.createdAt,
+    return Expense.fromMap(
+      await _api.save('expenses', values, id: existing?.id),
     );
   }
 
-  Future<void> delete(Expense expense) => _database
-      .delete('expenses', where: 'id=?', whereArgs: [expense.id])
-      .then((_) {});
+  Future<void> delete(Expense expense) async =>
+      _api.remove('expenses', expense.id!);
 
   Future<void> deleteCategory(ExpenseCategory category) async {
-    final used = await _database.query(
-      'expenses',
-      columns: ['id'],
-      where: 'expense_category_id=?',
-      whereArgs: [category.id],
-      limit: 1,
-    );
-    if (used.isNotEmpty) throw const ExpenseCategoryInUseException();
-    await _database.delete(
-      'expense_categories',
-      where: 'id=?',
-      whereArgs: [category.id],
-    );
+    await _api.remove('expense_categories', category.id!);
   }
 
   Future<double> total({required DateTime from, required DateTime to}) async {
-    final rows = await _database.open().then(
-      (db) => db.rawQuery(
-        'SELECT COALESCE(SUM(amount),0) AS total FROM expenses WHERE expense_date >= ? AND expense_date < ?',
-        [from.toIso8601String(), to.toIso8601String()],
-      ),
-    );
-    return (rows.single['total'] as num).toDouble();
+    final rows = await expenses(from: from, to: to);
+    return rows.fold<double>(0, (sum, expense) => sum + expense.amount);
   }
 }
 

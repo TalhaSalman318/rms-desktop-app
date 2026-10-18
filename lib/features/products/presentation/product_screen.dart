@@ -32,7 +32,12 @@ class _ProductScreenState extends State<ProductScreen> {
     return AnimatedBuilder(
       animation: widget.controller,
       builder: (context, _) => Padding(
-        padding: const EdgeInsets.fromLTRB(32, 20, 32, 32),
+        padding: EdgeInsets.fromLTRB(
+          responsivePageInset(context),
+          20,
+          responsivePageInset(context),
+          32,
+        ),
         child: Column(
           children: [
             SectionHeader(
@@ -45,40 +50,86 @@ class _ProductScreenState extends State<ProductScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: SearchField(
-                    controller: _searchController,
-                    hint: 'Search products',
-                    onChanged: (value) => widget.controller.load(search: value),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                SizedBox(
-                  width: 220,
-                  child: DropdownButtonFormField<int>(
-                    initialValue: widget.controller.categoryId,
-                    decoration: const InputDecoration(labelText: 'Category'),
-                    items: [
-                      const DropdownMenuItem<int>(
-                        child: Text('All categories'),
-                      ),
-                      ...widget.controller.categories.map(
-                        (category) => DropdownMenuItem(
-                          value: category.id,
-                          child: Text(category.name),
+            LayoutBuilder(
+              builder: (context, constraints) => constraints.maxWidth < 600
+                  ? Column(
+                      children: [
+                        SearchField(
+                          controller: _searchController,
+                          hint: 'Search products',
+                          onChanged: (value) =>
+                              widget.controller.load(search: value),
                         ),
-                      ),
-                    ],
-                    onChanged: (value) =>
-                        widget.controller.load(categoryId: value),
-                  ),
-                ),
-              ],
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<int>(
+                          initialValue: dropdownValueOrNull(
+                            widget.controller.categoryId,
+                            widget.controller.categories
+                                .map((c) => c.id)
+                                .whereType<int>(),
+                          ),
+                          decoration: const InputDecoration(
+                            labelText: 'Category',
+                          ),
+                          items: [
+                            const DropdownMenuItem<int>(
+                              child: Text('All categories'),
+                            ),
+                            ...widget.controller.categories.map(
+                              (category) => DropdownMenuItem(
+                                value: category.id,
+                                child: Text(category.name),
+                              ),
+                            ),
+                          ],
+                          onChanged: (value) =>
+                              widget.controller.load(categoryId: value),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(
+                          child: SearchField(
+                            controller: _searchController,
+                            hint: 'Search products',
+                            onChanged: (value) =>
+                                widget.controller.load(search: value),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 220,
+                          child: DropdownButtonFormField<int>(
+                            initialValue: dropdownValueOrNull(
+                              widget.controller.categoryId,
+                              widget.controller.categories
+                                  .map((c) => c.id)
+                                  .whereType<int>(),
+                            ),
+                            decoration: const InputDecoration(
+                              labelText: 'Category',
+                            ),
+                            items: [
+                              const DropdownMenuItem<int>(
+                                child: Text('All categories'),
+                              ),
+                              ...widget.controller.categories.map(
+                                (category) => DropdownMenuItem(
+                                  value: category.id,
+                                  child: Text(category.name),
+                                ),
+                              ),
+                            ],
+                            onChanged: (value) =>
+                                widget.controller.load(categoryId: value),
+                          ),
+                        ),
+                      ],
+                    ),
             ),
             const SizedBox(height: 18),
-            Expanded(child: _body()),
+            Expanded(child: SingleChildScrollView(child: _body())),
           ],
         ),
       ),
@@ -109,6 +160,8 @@ class _ProductScreenState extends State<ProductScreen> {
     return AppCard(
       padding: EdgeInsets.zero,
       child: ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
         itemCount: widget.controller.products.length,
         separatorBuilder: (_, _) =>
             const Divider(height: 1, color: AppTheme.border),
@@ -126,33 +179,59 @@ class _ProductScreenState extends State<ProductScreen> {
               label: product.isActive ? 'Active' : 'Inactive',
               color: product.isActive ? Colors.greenAccent : Colors.grey,
             ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Rs. ${product.price.toStringAsFixed(2)}'),
-                IconButton(
-                  tooltip: 'Edit product',
-                  onPressed: () => _showDialog(product),
-                  icon: const Icon(Icons.edit_outlined),
-                ),
-                IconButton(
-                  tooltip: product.isActive
-                      ? 'Deactivate product'
-                      : 'Activate product',
-                  onPressed: () => widget.controller.toggle(product),
-                  icon: Icon(
-                    product.isActive
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
+            trailing: MediaQuery.sizeOf(context).width < 600
+                ? PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'edit') _showDialog(product);
+                      if (value == 'toggle') widget.controller.toggle(product);
+                      if (value == 'delete') _delete(product);
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Text('Edit product'),
+                      ),
+                      PopupMenuItem(
+                        value: 'toggle',
+                        child: Text(
+                          product.isActive
+                              ? 'Deactivate product'
+                              : 'Activate product',
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Text('Delete product'),
+                      ),
+                    ],
+                  )
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Rs. ${product.price.toStringAsFixed(2)}'),
+                      IconButton(
+                        tooltip: 'Edit product',
+                        onPressed: () => _showDialog(product),
+                        icon: const Icon(Icons.edit_outlined),
+                      ),
+                      IconButton(
+                        tooltip: product.isActive
+                            ? 'Deactivate product'
+                            : 'Activate product',
+                        onPressed: () => widget.controller.toggle(product),
+                        icon: Icon(
+                          product.isActive
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Delete product',
+                        onPressed: () => _delete(product),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ],
                   ),
-                ),
-                IconButton(
-                  tooltip: 'Delete product',
-                  onPressed: () => _delete(product),
-                  icon: const Icon(Icons.delete_outline),
-                ),
-              ],
-            ),
           );
         },
       ),
@@ -172,8 +251,13 @@ class _ProductScreenState extends State<ProductScreen> {
     final price = TextEditingController(text: product?.price.toString());
     final description = TextEditingController(text: product?.description);
     final formKey = GlobalKey<FormState>();
+    final categoryIds = widget.controller.categories
+        .map((category) => category.id)
+        .whereType<int>()
+        .toList();
     var categoryId =
-        product?.categoryId ?? widget.controller.categories.first.id;
+        dropdownValueOrNull(product?.categoryId, categoryIds) ??
+        categoryIds.first;
     var active = product?.isActive ?? true;
     String? error;
     final saved = await showDialog<bool>(
@@ -182,69 +266,81 @@ class _ProductScreenState extends State<ProductScreen> {
         builder: (context, setDialogState) => AlertDialog(
           title: Text(product == null ? 'Add product' : 'Edit product'),
           content: SizedBox(
-            width: 440,
-            child: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: name,
-                    maxLength: 100,
-                    decoration: const InputDecoration(
-                      labelText: 'Product name',
+            width: responsiveDialogWidth(context, 440),
+            child: SingleChildScrollView(
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: name,
+                      maxLength: 100,
+                      decoration: const InputDecoration(
+                        labelText: 'Product name',
+                      ),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Enter a name.'
+                          : null,
                     ),
-                    validator: (value) => value == null || value.trim().isEmpty
-                        ? 'Enter a name.'
-                        : null,
-                  ),
-                  DropdownButtonFormField<int>(
-                    initialValue: categoryId,
-                    decoration: const InputDecoration(labelText: 'Category'),
-                    items: widget.controller.categories
-                        .map(
-                          (category) => DropdownMenuItem(
-                            value: category.id,
-                            child: Text(category.name),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) =>
-                        setDialogState(() => categoryId = value),
-                    validator: (value) =>
-                        value == null ? 'Select a category.' : null,
-                  ),
-                  TextFormField(
-                    controller: price,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
+                    DropdownButtonFormField<int>(
+                      initialValue: dropdownValueOrNull(
+                        categoryId,
+                        widget.controller.categories
+                            .map((c) => c.id)
+                            .whereType<int>(),
+                      ),
+                      decoration: const InputDecoration(labelText: 'Category'),
+                      items: widget.controller.categories
+                          .map(
+                            (category) => DropdownMenuItem(
+                              value: category.id,
+                              child: Text(category.name),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() => categoryId = value);
+                        }
+                      },
+                      validator: (value) =>
+                          value == null ? 'Select a category.' : null,
                     ),
-                    decoration: const InputDecoration(labelText: 'Price'),
-                    validator: (value) {
-                      final parsed = double.tryParse(value ?? '');
-                      return parsed == null || parsed <= 0
-                          ? 'Enter a price greater than zero.'
-                          : null;
-                    },
-                  ),
-                  TextFormField(
-                    controller: description,
-                    maxLines: 2,
-                    decoration: const InputDecoration(
-                      labelText: 'Description (optional)',
+                    TextFormField(
+                      controller: price,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(labelText: 'Price'),
+                      validator: (value) {
+                        final parsed = double.tryParse(value ?? '');
+                        return parsed == null || parsed <= 0
+                            ? 'Enter a price greater than zero.'
+                            : null;
+                      },
                     ),
-                  ),
-                  SwitchListTile(
-                    title: const Text('Active'),
-                    value: active,
-                    onChanged: (value) => setDialogState(() => active = value),
-                  ),
-                  if (error != null)
-                    Text(
-                      error!,
-                      style: const TextStyle(color: AppTheme.accent),
+                    TextFormField(
+                      controller: description,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        labelText: 'Description (optional)',
+                      ),
                     ),
-                ],
+                    SwitchListTile(
+                      title: const Text('Active'),
+                      value: active,
+                      onChanged: (value) =>
+                          setDialogState(() => active = value),
+                    ),
+                    if (error != null)
+                      Text(
+                        error!,
+                        style: const TextStyle(color: AppTheme.accent),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -261,7 +357,7 @@ class _ProductScreenState extends State<ProductScreen> {
                 final result = await widget.controller.save(
                   product: product,
                   name: name.text,
-                  categoryId: categoryId!,
+                  categoryId: categoryId,
                   price: double.parse(price.text),
                   description: description.text,
                   active: active,

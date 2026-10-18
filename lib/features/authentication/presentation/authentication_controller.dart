@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/services/api_client.dart';
 import '../data/authentication_service.dart';
 import '../../../data/models/database_models.dart';
 
@@ -21,13 +22,24 @@ class AuthenticationController extends ChangeNotifier {
 
   Future<void> initialize() async {
     try {
-      await _service.ensureInitialAdmin();
+      _admin = await _service.restoreSession();
+    } on ApiException catch (error) {
+      _errorMessage = error.statusCode == null
+          ? 'Cannot reach the backend. Start the Node.js server and try again.'
+          : 'Unable to restore your session. Please sign in again.';
     } catch (_) {
-      _errorMessage = 'Unable to prepare the admin account.';
+      _errorMessage = 'Unable to restore your session. Please sign in again.';
     } finally {
       _isInitializing = false;
       notifyListeners();
     }
+  }
+
+  void handleUnauthorized() {
+    if (_admin == null) return;
+    _admin = null;
+    _errorMessage = 'Your session has expired. Please sign in again.';
+    notifyListeners();
   }
 
   Future<bool> login(String username, String password) async {
@@ -44,6 +56,11 @@ class AuthenticationController extends ChangeNotifier {
       }
       _admin = admin;
       return true;
+    } on ApiException catch (error) {
+      _errorMessage = error.statusCode == null
+          ? 'Cannot reach the backend. Start the Node.js server and try again.'
+          : 'Unable to sign in. Please try again.';
+      return false;
     } catch (_) {
       _errorMessage = 'Unable to sign in. Please try again.';
       return false;
@@ -52,26 +69,32 @@ class AuthenticationController extends ChangeNotifier {
     }
   }
 
-  void logout() {
-    _admin = null;
-    _errorMessage = null;
-    notifyListeners();
+  Future<void> logout() async {
+    try {
+      await _service.logout();
+    } finally {
+      _admin = null;
+      _errorMessage = null;
+      notifyListeners();
+    }
   }
 
   Future<bool> changePassword({
     required String currentPassword,
     required String newPassword,
   }) async {
-    final admin = _admin;
-    if (admin == null || admin.id == null) return false;
+    if (_admin == null) return false;
 
     final changed = await _service.changePassword(
-      adminId: admin.id!,
       currentPassword: currentPassword,
       newPassword: newPassword,
     );
     if (!changed) {
       _errorMessage = 'The current password is incorrect.';
+      notifyListeners();
+    } else {
+      _admin = null;
+      _errorMessage = null;
       notifyListeners();
     }
     return changed;

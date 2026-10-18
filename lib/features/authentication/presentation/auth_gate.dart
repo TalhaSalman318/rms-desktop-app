@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../data/database/sqlite_database_service.dart';
-import '../../../core/services/backup_service.dart';
+import '../../../core/services/api_client.dart';
 import '../../../shared/widgets/app_shell.dart';
 import '../../../shared/widgets/ui_components.dart';
 import '../data/authentication_service.dart';
@@ -30,16 +29,16 @@ import 'change_password_screen.dart';
 import 'login_screen.dart';
 
 class AuthGate extends StatefulWidget {
-  const AuthGate({super.key, this.databaseService});
+  const AuthGate({super.key, this.apiClient});
 
-  final SqliteDatabaseService? databaseService;
+  final ApiClient? apiClient;
 
   @override
   State<AuthGate> createState() => _AuthGateState();
 }
 
 class _AuthGateState extends State<AuthGate> {
-  late final SqliteDatabaseService _database;
+  late final ApiClient _api;
   late final AuthenticationController _controller;
   late final CategoryController _categoryController;
   late final ProductController _productController;
@@ -50,26 +49,27 @@ class _AuthGateState extends State<AuthGate> {
   late final DealRepository _dealRepository;
   late final ReportRepository _reportRepository;
   late final CalendarRepository _calendarRepository;
-  int _workspaceGeneration = 0;
+  final int _workspaceGeneration = 0;
 
   @override
   void initState() {
     super.initState();
-    _database = widget.databaseService ?? SqliteDatabaseService.instance;
-    _controller = AuthenticationController(AuthenticationService(_database));
-    _categoryController = CategoryController(CategoryRepository(_database));
-    _productController = ProductController(ProductRepository(_database));
-    _orderRepository = OrderRepository(_database);
+    _api = widget.apiClient ?? ApiClient();
+    _controller = AuthenticationController(AuthenticationService(_api));
+    _api.onUnauthorized = _controller.handleUnauthorized;
+    _categoryController = CategoryController(CategoryRepository(_api));
+    _productController = ProductController(ProductRepository(_api));
+    _orderRepository = OrderRepository(_api);
     _posController = PosController(
-      ProductRepository(_database),
+      ProductRepository(_api),
       _orderRepository,
-      DealRepository(_database),
+      DealRepository(_api),
     );
-    _dashboardRepository = DashboardRepository(_database);
-    _expenseRepository = ExpenseRepository(_database);
-    _dealRepository = DealRepository(_database);
-    _reportRepository = ReportRepository(_database);
-    _calendarRepository = CalendarRepository(_database);
+    _dashboardRepository = DashboardRepository(_api);
+    _expenseRepository = ExpenseRepository(_api);
+    _dealRepository = DealRepository(_api);
+    _reportRepository = ReportRepository(_api);
+    _calendarRepository = CalendarRepository(_api);
     _controller.initialize();
   }
 
@@ -104,8 +104,6 @@ class _AuthGateState extends State<AuthGate> {
             ),
             AppShell.settingsRoute: ChangePasswordScreen(
               controller: _controller,
-              backupService: LocalBackupService(_database),
-              onDatabaseRestored: _handleDatabaseRestored,
             ),
             AppShell.categoriesRoute: CategoryScreen(
               controller: _categoryController,
@@ -120,7 +118,7 @@ class _AuthGateState extends State<AuthGate> {
             ),
             AppShell.dealsRoute: DealScreen(
               repository: _dealRepository,
-              products: ProductRepository(_database),
+              products: ProductRepository(_api),
             ),
             AppShell.reportsRoute: ReportsScreen(repository: _reportRepository),
             AppShell.calendarRoute: CalendarScreen(
@@ -138,11 +136,18 @@ class _AuthGateState extends State<AuthGate> {
       title: 'Log out of SAVOR?',
       message: 'Your local data will remain safely stored on this device.',
     );
-    if (confirmed) _controller.logout();
-  }
-
-  void _handleDatabaseRestored() {
-    _posController.resetAfterDatabaseRestore();
-    setState(() => _workspaceGeneration++);
+    if (!confirmed) return;
+    try {
+      await _controller.logout();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Signed out locally, but the server session could not be revoked.',
+          ),
+        ),
+      );
+    }
   }
 }

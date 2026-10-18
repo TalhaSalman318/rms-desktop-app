@@ -2,27 +2,27 @@ class Admin {
   const Admin({
     this.id,
     required this.username,
-    required this.password,
     this.createdAt,
+    this.requiresPasswordChange = false,
   });
 
   final int? id;
   final String username;
-  final String password;
   final String? createdAt;
+  final bool requiresPasswordChange;
 
   factory Admin.fromMap(Map<String, Object?> map) => Admin(
     id: map['id'] as int?,
     username: map['username'] as String,
-    password: map['password'] as String,
     createdAt: map['created_at'] as String?,
+    requiresPasswordChange: map['requires_password_change'] == true,
   );
 
   Map<String, Object?> toMap() => {
     'id': id,
     'username': username,
-    'password': password,
     'created_at': createdAt,
+    'requires_password_change': requiresPasswordChange,
   };
 }
 
@@ -71,7 +71,9 @@ class Product {
     categoryId: map['category_id'] as int,
     price: (map['price'] as num).toDouble(),
     description: map['description'] as String? ?? '',
-    isActive: (map['is_active'] as int) == 1,
+    isActive: map['is_active'] is bool
+        ? map['is_active'] as bool
+        : (map['is_active'] as num?)?.toInt() == 1,
     createdAt: map['created_at'] as String?,
   );
 
@@ -96,6 +98,8 @@ class Order {
     required this.totalAmount,
     required this.paymentMethod,
     required this.status,
+    this.orderType = 'Dine-In',
+    this.deliveryCharges = 0,
     this.createdAt,
   });
 
@@ -107,6 +111,8 @@ class Order {
   final double totalAmount;
   final String paymentMethod;
   final String status;
+  final String orderType;
+  final double deliveryCharges;
   final String? createdAt;
 
   factory Order.fromMap(Map<String, Object?> map) => Order(
@@ -118,6 +124,8 @@ class Order {
     totalAmount: (map['total_amount'] as num).toDouble(),
     paymentMethod: map['payment_method'] as String,
     status: map['status'] as String,
+    orderType: map['order_type'] as String? ?? 'Dine-In',
+    deliveryCharges: (map['delivery_charges'] as num?)?.toDouble() ?? 0,
     createdAt: map['created_at'] as String?,
   );
 
@@ -130,6 +138,8 @@ class Order {
     'total_amount': totalAmount,
     'payment_method': paymentMethod,
     'status': status,
+    'order_type': orderType,
+    'delivery_charges': deliveryCharges,
     'created_at': createdAt,
   };
 }
@@ -259,7 +269,9 @@ class Deal {
     description: map['description'] as String? ?? '',
     normalPrice: (map['normal_price'] as num).toDouble(),
     dealPrice: (map['deal_price'] as num).toDouble(),
-    isActive: (map['is_active'] as int) == 1,
+    isActive: map['is_active'] is bool
+        ? map['is_active'] as bool
+        : (map['is_active'] as num?)?.toInt() == 1,
     createdAt: map['created_at'] as String?,
   );
 

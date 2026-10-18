@@ -2,6 +2,20 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_theme.dart';
 
+double responsivePageInset(BuildContext context) {
+  final width = MediaQuery.sizeOf(context).width;
+  if (width < 600) return 16;
+  if (width < 1000) return 24;
+  return 32;
+}
+
+double responsiveDialogWidth(BuildContext context, double maxWidth) =>
+    (MediaQuery.sizeOf(context).width - 32).clamp(240, maxWidth).toDouble();
+
+T? dropdownValueOrNull<T>(T? selected, Iterable<T> values) {
+  return selected != null && values.contains(selected) ? selected : null;
+}
+
 class PrimaryButton extends StatelessWidget {
   const PrimaryButton({
     super.key,
@@ -23,7 +37,10 @@ class PrimaryButton extends StatelessWidget {
       style: FilledButton.styleFrom(
         backgroundColor: AppTheme.accent,
         foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        padding: EdgeInsets.symmetric(
+          horizontal: MediaQuery.sizeOf(context).width < 600 ? 12 : 18,
+          vertical: 14,
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
@@ -51,7 +68,10 @@ class SecondaryButton extends StatelessWidget {
       style: OutlinedButton.styleFrom(
         foregroundColor: AppTheme.cream,
         side: const BorderSide(color: AppTheme.flameOrange),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        padding: EdgeInsets.symmetric(
+          horizontal: MediaQuery.sizeOf(context).width < 600 ? 12 : 18,
+          vertical: 14,
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
@@ -104,23 +124,34 @@ class SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: Theme.of(context).textTheme.titleLarge),
-              if (subtitle != null) ...[
-                const SizedBox(height: 4),
-                Text(subtitle!, style: Theme.of(context).textTheme.bodyMedium),
-              ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow = constraints.maxWidth < 760;
+        final heading = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: Theme.of(context).textTheme.titleLarge),
+            if (subtitle != null) ...[
+              const SizedBox(height: 4),
+              Text(subtitle!, style: Theme.of(context).textTheme.bodyMedium),
             ],
-          ),
-        ),
-        ?action,
-      ],
+          ],
+        );
+        if (action == null) return heading;
+        if (narrow) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [heading, const SizedBox(height: 14), action!],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(child: heading),
+            action!,
+          ],
+        );
+      },
     );
   }
 }
@@ -170,7 +201,9 @@ class StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
+      padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 600 ? 14 : 20),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -178,6 +211,8 @@ class StatCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
@@ -191,20 +226,67 @@ class StatCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 18),
-          Text(
-            value,
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: FittedBox(
+              alignment: Alignment.centerLeft,
+              fit: BoxFit.scaleDown,
+              child: Text(
+                value,
+                maxLines: 1,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'Awaiting live data',
-            style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+          const SizedBox(height: 6),
+          const FittedBox(
+            alignment: Alignment.centerLeft,
+            fit: BoxFit.scaleDown,
+            child: Text(
+              'Awaiting live data',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+            ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class ResponsiveStatGrid extends StatelessWidget {
+  const ResponsiveStatGrid({
+    super.key,
+    required this.children,
+    this.desktopColumns = 3,
+  });
+
+  final List<Widget> children;
+  final int desktopColumns;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth < 560
+            ? 1
+            : constraints.maxWidth < 900
+            ? desktopColumns.clamp(1, 2)
+            : desktopColumns;
+        final gap = 12.0;
+        final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final child in children) SizedBox(width: width, child: child),
+          ],
+        );
+      },
     );
   }
 }
@@ -286,7 +368,7 @@ class LoadingState extends StatelessWidget {
           child: CircularProgressIndicator(strokeWidth: 2),
         ),
         const SizedBox(width: 10),
-        Text(label),
+        Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
       ],
     );
   }

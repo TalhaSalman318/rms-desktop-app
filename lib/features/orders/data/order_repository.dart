@@ -1,144 +1,59 @@
-import '../../../core/database/database_service.dart';
+import '../../../core/services/api_client.dart';
 import '../../../data/models/database_models.dart';
 import '../../deals/data/deal_repository.dart';
 
 class OrderRepository {
-  OrderRepository(this._database);
-  final DatabaseService _database;
+  OrderRepository(this._api);
+  final ApiClient _api;
 
   Future<int> nextOrderNumber() async {
-    final rows = await _database.open().then(
-      (db) => db.rawQuery(
-        'SELECT COALESCE(MAX(order_number), 1000) + 1 AS next_number FROM orders',
-      ),
-    );
-    return rows.single['next_number'] as int;
+    return _api.nextOrderNumber();
   }
 
   Future<int> placeOrder({
     required List<CartLine> lines,
     required double discount,
     required String paymentMethod,
-    required String status,
+    required String orderType,
+    required double deliveryCharges,
   }) async {
     if (lines.isEmpty) {
       throw const OrderValidationException('Add at least one product.');
     }
-    return _database.transaction((transaction) async {
-      final ids = lines
-          .expand(
-            (line) => line.product != null
-                ? [line.product!.id]
-                : line.deal!.items.map((item) => item.productId),
+    final payload = <String, dynamic>{
+      'discount': discount,
+      'payment_method': paymentMethod,
+      'order_type': orderType,
+      'delivery_charges': deliveryCharges,
+      'lines': lines
+          .map(
+            (line) => <String, dynamic>{
+              'product_id': line.product?.id,
+              'deal_id': line.deal?.deal.id,
+              'quantity': line.quantity,
+            },
           )
-          .toList();
-      final fresh = ids.isEmpty
-          ? <Map<String, Object?>>[]
-          : await transaction.rawQuery(
-              'SELECT * FROM products WHERE id IN (${List.filled(ids.length, '?').join(',')}) AND is_active = 1',
-              ids,
-            );
-      if (fresh.length != ids.toSet().length) {
-        throw const OrderValidationException(
-          'One or more products are no longer available.',
-        );
-      }
-      for (final line in lines.where((line) => line.deal != null)) {
-        final dealRows = await transaction.query(
-          'deals',
-          where: 'id = ? AND is_active = 1',
-          whereArgs: [line.deal!.deal.id],
-          limit: 1,
-        );
-        if (dealRows.isEmpty) {
-          throw const OrderValidationException(
-            'One or more deals are no longer available.',
-          );
-        }
-      }
-      final byId = {
-        for (final row in fresh) row['id'] as int: Product.fromMap(row),
-      };
-      final refreshed = lines.map((line) {
-        if (line.deal != null) return line;
-        return CartLine(byId[line.product!.id], line.quantity);
-      }).toList();
-      final subtotal = refreshed.fold<double>(
-        0,
-        (sum, line) => sum + line.subtotal,
-      );
-      if (discount < 0 || discount > subtotal) {
-        throw const OrderValidationException(
-          'Discount must be between zero and the subtotal.',
-        );
-      }
-      final numberRows = await transaction.rawQuery(
-        'SELECT COALESCE(MAX(order_number), 1000) + 1 AS next_number FROM orders',
-      );
-      final orderNumber = numberRows.single['next_number'] as int;
-      final orderId = await transaction.insert('orders', {
-        'order_number': orderNumber,
-        'order_date': DateTime.now().toIso8601String(),
-        'subtotal': subtotal,
-        'discount': discount,
-        'total_amount': subtotal - discount,
-        'payment_method': paymentMethod,
-        'status': status,
-      });
-      for (final line in refreshed) {
-        await transaction.insert('order_items', {
-          'order_id': orderId,
-          'product_id': line.product?.id ?? line.deal!.items.first.productId,
-          'quantity': line.quantity,
-          'unit_price': line.unitPrice,
-          'subtotal': line.subtotal,
-          'deal_id': line.deal?.deal.id,
-          'deal_name': line.deal?.deal.name,
-        });
-      }
-      return orderNumber;
-    });
+          .toList(),
+    };
+    final result = await _api.placeOrder(payload);
+    return result['order_number'] as int;
   }
 
   Future<List<Order>> getOrders({String search = '', String? status}) async {
-    final clauses = <String>[];
-    final args = <Object?>[];
-    if (search.trim().isNotEmpty) {
-      clauses.add(
-        '(CAST(order_number AS TEXT) LIKE ? OR payment_method LIKE ? OR status LIKE ?)',
-      );
-      args.addAll([
-        '%${search.trim()}%',
-        '%${search.trim()}%',
-        '%${search.trim()}%',
-      ]);
-    }
-    if (status != null) {
-      clauses.add('status = ?');
-      args.add(status);
-    }
-    final rows = await _database.query(
-      'orders',
-      where: clauses.isEmpty ? null : clauses.join(' AND '),
-      whereArgs: args,
-      orderBy: 'order_date DESC',
-    );
+    final query = <String, String>{
+      if (search.trim().isNotEmpty) 'search': search.trim(),
+    };
+    if (status != null) query['status'] = status;
+    final rows = await _api.list('orders', query: query);
     return rows.map(Order.fromMap).toList();
   }
 
-  Future<List<OrderItem>> getItems(int orderId) async => (await _database.query(
-    'order_items',
-    where: 'order_id = ?',
-    whereArgs: [orderId],
+  Future<List<OrderItem>> getItems(int orderId) async => (await _api.list(
+    'orders/$orderId/items',
   )).map(OrderItem.fromMap).toList();
   Future<void> cancel(Order order) async {
     if (order.status == 'Cancelled') return;
-    await _database.update(
-      'orders',
-      {'status': 'Cancelled'},
-      where: 'id = ?',
-      whereArgs: [order.id],
-    );
+    await _api.save('orders', {'status': 'Cancelled'}, id: order.id);
   }
 }
 

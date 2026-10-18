@@ -15,6 +15,7 @@ class PosScreen extends StatefulWidget {
 
 class _PosScreenState extends State<PosScreen> {
   final search = TextEditingController();
+  final deliveryCharges = TextEditingController();
   @override
   void initState() {
     super.initState();
@@ -24,6 +25,7 @@ class _PosScreenState extends State<PosScreen> {
   @override
   void dispose() {
     search.dispose();
+    deliveryCharges.dispose();
     super.dispose();
   }
 
@@ -33,10 +35,15 @@ class _PosScreenState extends State<PosScreen> {
       animation: widget.controller,
       builder: (context, _) {
         return Padding(
-          padding: const EdgeInsets.fromLTRB(32, 20, 32, 32),
-          child: Column(
-            children: [
-              SectionHeader(
+          padding: EdgeInsets.fromLTRB(
+            MediaQuery.sizeOf(context).width < 600 ? 16 : 32,
+            20,
+            MediaQuery.sizeOf(context).width < 600 ? 16 : 32,
+            32,
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final header = SectionHeader(
                 title: 'New Order',
                 subtitle: 'Build an order with current menu prices.',
                 action: SecondaryButton(
@@ -46,25 +53,49 @@ class _PosScreenState extends State<PosScreen> {
                       ? null
                       : widget.controller.clear,
                 ),
-              ),
-              const SizedBox(height: 20),
-              Expanded(
-                child: Row(
-                  children: [
-                    Expanded(child: _productList()),
-                    const SizedBox(width: 18),
-                    SizedBox(width: 390, child: _cartPanel()),
-                  ],
-                ),
-              ),
-            ],
+              );
+
+              if (constraints.maxWidth < 800) {
+                return SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      header,
+                      const SizedBox(height: 20),
+                      _productList(shrinkWrap: true),
+                      const SizedBox(height: 18),
+                      _cartPanel(),
+                    ],
+                  ),
+                );
+              }
+
+              return Column(
+                children: [
+                  header,
+                  const SizedBox(height: 20),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Expanded(child: _productList()),
+                        const SizedBox(width: 18),
+                        SizedBox(
+                          width: 390,
+                          child: SingleChildScrollView(child: _cartPanel()),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         );
       },
     );
   }
 
-  Widget _productList() {
+  Widget _productList({bool shrinkWrap = false}) {
     if (widget.controller.loading) {
       return const Center(child: LoadingState(label: 'Loading products'));
     }
@@ -77,6 +108,8 @@ class _PosScreenState extends State<PosScreen> {
       );
     }
     return ListView(
+      shrinkWrap: shrinkWrap,
+      physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
       children: [
         if (widget.controller.deals.isNotEmpty) ...[
           const Padding(
@@ -144,7 +177,8 @@ class _PosScreenState extends State<PosScreen> {
       children: [
         Text('Current order', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 14),
-        Expanded(
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 300),
           child: widget.controller.cart.isEmpty
               ? const EmptyState(
                   title: 'Cart is empty',
@@ -152,6 +186,7 @@ class _PosScreenState extends State<PosScreen> {
                   icon: Icons.shopping_cart_outlined,
                 )
               : ListView(
+                  shrinkWrap: true,
                   children: widget.controller.cart.map(_cartLine).toList(),
                 ),
         ),
@@ -167,7 +202,15 @@ class _PosScreenState extends State<PosScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           const Text('Subtotal'),
-          Text('Rs. ${widget.controller.subtotal.toStringAsFixed(2)}'),
+          Flexible(
+            child: FittedBox(
+              alignment: Alignment.centerRight,
+              fit: BoxFit.scaleDown,
+              child: Text(
+                'Rs. ${widget.controller.subtotal.toStringAsFixed(2)}',
+              ),
+            ),
+          ),
         ],
       ),
       TextField(
@@ -177,25 +220,40 @@ class _PosScreenState extends State<PosScreen> {
             widget.controller.setDiscount(double.tryParse(value) ?? 0),
       ),
       DropdownButtonFormField<String>(
-        initialValue: widget.controller.paymentMethod,
+        initialValue: dropdownValueOrNull(
+          widget.controller.paymentMethod,
+          const ['Cash', 'Card', 'Online'],
+        ),
         decoration: const InputDecoration(labelText: 'Payment'),
-        items: ['Cash', 'Card', 'Online']
+        items: const ['Cash', 'Card', 'Online']
             .map((value) => DropdownMenuItem(value: value, child: Text(value)))
             .toList(),
         onChanged: (value) {
           if (value != null) widget.controller.setPaymentMethod(value);
         },
       ),
-      DropdownButtonFormField<String>(
-        initialValue: widget.controller.status,
-        decoration: const InputDecoration(labelText: 'Status'),
-        items: ['Completed', 'Pending', 'Cancelled']
-            .map((value) => DropdownMenuItem(value: value, child: Text(value)))
-            .toList(),
-        onChanged: (value) {
-          if (value != null) widget.controller.setStatus(value);
+      SegmentedButton<String>(
+        segments: const [
+          ButtonSegment(value: 'Dine-In', label: Text('Dine-In')),
+          ButtonSegment(value: 'Takeaway', label: Text('Takeaway')),
+          ButtonSegment(value: 'Delivery', label: Text('Delivery')),
+        ],
+        selected: {widget.controller.orderType},
+        onSelectionChanged: (value) {
+          widget.controller.setOrderType(value.first);
+          if (value.first != 'Delivery') deliveryCharges.clear();
         },
       ),
+      if (widget.controller.orderType == 'Delivery') ...[
+        const SizedBox(height: 10),
+        TextField(
+          controller: deliveryCharges,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(labelText: 'Delivery Charges'),
+          onChanged: (value) =>
+              widget.controller.setDeliveryCharges(double.tryParse(value) ?? 0),
+        ),
+      ],
       const SizedBox(height: 10),
       Text(
         'Grand total  Rs. ${widget.controller.total.toStringAsFixed(2)}',

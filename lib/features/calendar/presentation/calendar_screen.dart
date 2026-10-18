@@ -35,7 +35,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
       const CalendarDay(orders: 0, sales: 0, expenses: 0);
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(32, 20, 32, 32),
+    padding: EdgeInsets.fromLTRB(
+      responsivePageInset(context),
+      20,
+      responsivePageInset(context),
+      32,
+    ),
     child: Column(
       children: [
         const SectionHeader(
@@ -46,50 +51,69 @@ class _CalendarScreenState extends State<CalendarScreen> {
         Expanded(
           child: loading
               ? const Center(child: LoadingState(label: 'Loading calendar'))
-              : Row(
-                  children: [
-                    Expanded(
-                      child: AppCard(
-                        child: TableCalendar<CalendarDay>(
-                          firstDay: DateTime(2020),
-                          lastDay: DateTime(2100),
-                          focusedDay: focused,
-                          selectedDayPredicate: (day) =>
-                              isSameDay(day, selected),
-                          onDaySelected: (day, focus) async {
-                            setState(() {
-                              selected = day;
-                              focused = focus;
-                            });
-                            final value = await widget.repository.details(day);
-                            if (mounted) setState(() => details = value);
-                          },
-                          onPageChanged: (day) {
-                            selected = DateTime(day.year, day.month, 1);
-                            focused = day;
-                            load();
-                          },
-                          eventLoader: (day) {
-                            final value =
-                                days[DateTime(day.year, day.month, day.day)];
-                            return value?.hasData == true ? [value!] : [];
-                          },
-                          calendarStyle: const CalendarStyle(
-                            markerDecoration: BoxDecoration(
-                              color: AppTheme.accent,
-                              shape: BoxShape.circle,
-                            ),
-                            selectedDecoration: BoxDecoration(
-                              color: AppTheme.accent,
-                              shape: BoxShape.circle,
-                            ),
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final narrow = constraints.maxWidth < 760;
+                    final calendar = AppCard(
+                      child: TableCalendar<CalendarDay>(
+                        firstDay: DateTime(2020),
+                        lastDay: DateTime(2100),
+                        focusedDay: focused,
+                        selectedDayPredicate: (day) => isSameDay(day, selected),
+                        onDaySelected: (day, focus) async {
+                          setState(() {
+                            selected = day;
+                            focused = focus;
+                          });
+                          final value = await widget.repository.details(day);
+                          if (mounted) setState(() => details = value);
+                        },
+                        onPageChanged: (day) {
+                          selected = DateTime(day.year, day.month, 1);
+                          focused = day;
+                          load();
+                        },
+                        eventLoader: (day) {
+                          final value =
+                              days[DateTime(day.year, day.month, day.day)];
+                          return value?.hasData == true ? [value!] : [];
+                        },
+                        calendarStyle: const CalendarStyle(
+                          markerDecoration: BoxDecoration(
+                            color: AppTheme.accent,
+                            shape: BoxShape.circle,
+                          ),
+                          selectedDecoration: BoxDecoration(
+                            color: AppTheme.accent,
+                            shape: BoxShape.circle,
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 18),
-                    SizedBox(width: 300, child: _details()),
-                  ],
+                    );
+                    final detailsPanel = SizedBox(
+                      width: narrow ? double.infinity : 300,
+                      child: _details(),
+                    );
+                    return SingleChildScrollView(
+                      child: narrow
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                calendar,
+                                const SizedBox(height: 18),
+                                detailsPanel,
+                              ],
+                            )
+                          : Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(child: calendar),
+                                const SizedBox(width: 18),
+                                detailsPanel,
+                              ],
+                            ),
+                    );
+                  },
                 ),
         ),
       ],

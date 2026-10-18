@@ -1,39 +1,27 @@
-import '../../../core/database/database_service.dart';
+import '../../../core/services/api_client.dart';
 import '../../../data/models/database_models.dart';
 
 class ProductRepository {
-  ProductRepository(this._database);
-  final DatabaseService _database;
+  ProductRepository(this._api);
+  final ApiClient _api;
 
   Future<List<Product>> getProducts({
     String search = '',
     int? categoryId,
     bool activeOnly = false,
   }) async {
-    final clauses = <String>[];
-    final args = <Object?>[];
-    if (search.trim().isNotEmpty) {
-      clauses.add('p.name LIKE ?');
-      args.add('%${search.trim()}%');
-    }
-    if (categoryId != null) {
-      clauses.add('p.category_id = ?');
-      args.add(categoryId);
-    }
-    if (activeOnly) clauses.add('p.is_active = 1');
-    final rows = await _database.open().then(
-      (db) => db.rawQuery(
-        'SELECT p.* FROM products p ${clauses.isEmpty ? '' : 'WHERE ${clauses.join(' AND ')}'} ORDER BY p.name COLLATE NOCASE',
-        args,
-      ),
-    );
-    return rows.map(Product.fromMap).toList();
+    final query = <String, String>{};
+    if (search.trim().isNotEmpty) query['search'] = search.trim();
+    if (categoryId != null) query['category_id'] = '$categoryId';
+    if (activeOnly) query['active_only'] = 'true';
+    return (await _api.list(
+      'products',
+      query: query,
+    )).map(Product.fromMap).toList();
   }
 
-  Future<List<Category>> getCategories() async => (await _database.query(
-    'categories',
-    orderBy: 'name COLLATE NOCASE',
-  )).map(Category.fromMap).toList();
+  Future<List<Category>> getCategories() async =>
+      (await _api.list('categories')).map(Category.fromMap).toList();
 
   Future<Product> save({
     Product? product,
@@ -49,76 +37,23 @@ class ProductRepository {
         'Enter a product name and a price greater than zero.',
       );
     }
-    final duplicate = await _database.query(
-      'products',
-      columns: ['id'],
-      where: product == null
-          ? 'LOWER(name) = LOWER(?)'
-          : 'LOWER(name) = LOWER(?) AND id != ?',
-      whereArgs: product == null ? [normalized] : [normalized, product.id],
-      limit: 1,
-    );
-    if (duplicate.isNotEmpty) throw const ProductDuplicateException();
-    final values = {
+    final values = <String, dynamic>{
       'name': normalized,
       'category_id': categoryId,
       'price': price,
       'description': description.trim(),
-      'is_active': isActive ? 1 : 0,
+      'is_active': isActive,
     };
-    if (product == null) {
-      final id = await _database.insert('products', values);
-      return Product(
-        id: id,
-        name: normalized,
-        categoryId: categoryId,
-        price: price,
-        description: description.trim(),
-        isActive: isActive,
-      );
-    }
-    await _database.update(
-      'products',
-      values,
-      where: 'id = ?',
-      whereArgs: [product.id],
-    );
-    return Product(
-      id: product.id,
-      name: normalized,
-      categoryId: categoryId,
-      price: price,
-      description: description.trim(),
-      isActive: isActive,
-      createdAt: product.createdAt,
+    return Product.fromMap(
+      await _api.save('products', values, id: product?.id),
     );
   }
 
-  Future<void> setActive(Product product, bool active) => _database
-      .update(
-        'products',
-        {'is_active': active ? 1 : 0},
-        where: 'id = ?',
-        whereArgs: [product.id],
-      )
-      .then((_) {});
+  Future<void> setActive(Product product, bool active) async =>
+      _api.save('products', {'is_active': active}, id: product.id);
 
   Future<void> delete(Product product) async {
-    final used = await _database.query(
-      'order_items',
-      columns: ['id'],
-      where: 'product_id = ?',
-      whereArgs: [product.id],
-      limit: 1,
-    );
-    if (used.isNotEmpty) {
-      throw const ProductUsedException();
-    }
-    await _database.delete(
-      'products',
-      where: 'id = ?',
-      whereArgs: [product.id],
-    );
+    await _api.remove('products', product.id!);
   }
 }
 

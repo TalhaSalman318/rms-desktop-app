@@ -38,9 +38,9 @@ class _CategoryScreenState extends State<CategoryScreen> {
           final compact = constraints.maxWidth < 720;
           return Padding(
             padding: EdgeInsets.fromLTRB(
-              compact ? 20 : 32,
+              responsivePageInset(context),
               20,
-              compact ? 20 : 32,
+              responsivePageInset(context),
               32,
             ),
             child: Column(
@@ -62,7 +62,9 @@ class _CategoryScreenState extends State<CategoryScreen> {
                   onChanged: (value) => widget.controller.load(search: value),
                 ),
                 const SizedBox(height: 18),
-                Expanded(child: _content(compact)),
+                Expanded(
+                  child: SingleChildScrollView(child: _content(compact)),
+                ),
               ],
             ),
           );
@@ -123,14 +125,14 @@ class _CategoryScreenState extends State<CategoryScreen> {
           ),
         ),
         const Divider(height: 1, color: AppTheme.border),
-        Expanded(
-          child: ListView.separated(
-            itemCount: widget.controller.categories.length,
-            separatorBuilder: (_, _) =>
-                const Divider(height: 1, color: AppTheme.border),
-            itemBuilder: (context, index) =>
-                _tableRow(widget.controller.categories[index]),
-          ),
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: widget.controller.categories.length,
+          separatorBuilder: (_, _) =>
+              const Divider(height: 1, color: AppTheme.border),
+          itemBuilder: (context, index) =>
+              _tableRow(widget.controller.categories[index]),
         ),
       ],
     );
@@ -173,6 +175,8 @@ class _CategoryScreenState extends State<CategoryScreen> {
   }
 
   Widget _compactList() => ListView.separated(
+    shrinkWrap: true,
+    physics: const NeverScrollableScrollPhysics(),
     itemCount: widget.controller.categories.length,
     separatorBuilder: (_, _) =>
         const Divider(height: 1, color: AppTheme.border),
@@ -219,7 +223,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
         builder: (context, setDialogState) => AlertDialog(
           title: Text(category == null ? 'Add category' : 'Edit category'),
           content: SizedBox(
-            width: 420,
+            width: responsiveDialogWidth(context, 420),
             child: Form(
               key: formKey,
               child: Column(

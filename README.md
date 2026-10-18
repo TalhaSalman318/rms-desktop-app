@@ -1,16 +1,31 @@
-## Development Login
-
-On an empty local database, the application creates one admin account:
-
-- Username: `admin`
-- Password: `Admin@123`
-
-The password is stored as a SHA-256 hash in SQLite. Change it from Settings
-after signing in. No customer or staff accounts are supported.
-
 # rms_desktop_app
 
-A new Flutter project.
+A Flutter restaurant management and POS application with a Node.js/Express and
+MongoDB backend.
+
+## Backend setup
+
+Copy `backend/.env.example` to `backend/.env` and set `MONGODB_URI`. When using
+an empty database, also set `INITIAL_ADMIN_PASSWORD` to a unique password of at
+least 12 characters. `INITIAL_ADMIN_USERNAME` defaults to `admin`. Do not commit
+`backend/.env` or share its contents.
+
+Run the API from the `backend` directory with `npm start`. All API routes except
+health checks and login require an authenticated session. Passwords are stored
+using scrypt. Existing accounts with legacy SHA-256 hashes are upgraded
+automatically after a successful sign-in. New passwords must contain at least
+12 characters. Change the admin password from Settings.
+
+## Login sessions
+
+The app stores only its session token, never the admin password. On Windows the
+token is encrypted with the current user's DPAPI key before it is persisted;
+other platforms use SharedPreferences. A valid session is restored after
+restarting the app. Signing out revokes the server session; sessions expire
+after 30 days. Configure `API_BASE_URL` with HTTPS when connecting to a backend
+outside the local machine.
+
+No customer or staff accounts are supported.
 
 ## Getting Started
 

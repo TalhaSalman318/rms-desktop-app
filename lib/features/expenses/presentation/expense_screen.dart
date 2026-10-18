@@ -56,21 +56,27 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
     final now = DateTime.now();
     final day = DateTime(now.year, now.month, now.day);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 20, 32, 32),
+      padding: EdgeInsets.fromLTRB(
+        responsivePageInset(context),
+        20,
+        responsivePageInset(context),
+        32,
+      ),
       child: Column(
         children: [
           SectionHeader(
             title: 'Expenses',
-            subtitle: 'Track operating costs from SQLite.',
-            action: Row(
-              mainAxisSize: MainAxisSize.min,
+            subtitle: 'Track operating costs from MongoDB Atlas.',
+            action: Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              alignment: WrapAlignment.end,
               children: [
                 SecondaryButton(
                   label: 'Categories',
                   icon: Icons.category_outlined,
                   onPressed: _categoryDialog,
                 ),
-                const SizedBox(width: 10),
                 PrimaryButton(
                   label: 'Add expense',
                   icon: Icons.add,
@@ -89,75 +95,94 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
               ),
               _total(DateTime(now.year), DateTime(now.year + 1)),
             ]),
-            builder: (context, snapshot) => Row(
+            builder: (context, snapshot) => ResponsiveStatGrid(
+              desktopColumns: 3,
               children: [
-                Expanded(
-                  child: StatCard(
-                    label: "Today's expenses",
-                    value:
-                        'Rs. ${snapshot.data?[0].toStringAsFixed(2) ?? '--'}',
-                    icon: Icons.today,
-                  ),
+                StatCard(
+                  label: "Today's expenses",
+                  value: 'Rs. ${snapshot.data?[0].toStringAsFixed(2) ?? '--'}',
+                  icon: Icons.today,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: StatCard(
-                    label: 'Monthly expenses',
-                    value:
-                        'Rs. ${snapshot.data?[1].toStringAsFixed(2) ?? '--'}',
-                    icon: Icons.calendar_month,
-                  ),
+                StatCard(
+                  label: 'Monthly expenses',
+                  value: 'Rs. ${snapshot.data?[1].toStringAsFixed(2) ?? '--'}',
+                  icon: Icons.calendar_month,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: StatCard(
-                    label: 'Yearly expenses',
-                    value:
-                        'Rs. ${snapshot.data?[2].toStringAsFixed(2) ?? '--'}',
-                    icon: Icons.auto_graph,
-                  ),
+                StatCard(
+                  label: 'Yearly expenses',
+                  value: 'Rs. ${snapshot.data?[2].toStringAsFixed(2) ?? '--'}',
+                  icon: Icons.auto_graph,
                 ),
               ],
             ),
           ),
           const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: SearchField(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final narrow = constraints.maxWidth < 700;
+              final categoryIds = cats
+                  .map((category) => category.id)
+                  .whereType<int>()
+                  .toList();
+              final filters = [
+                SearchField(
                   controller: search,
                   hint: 'Search description',
                   onChanged: (_) => load(),
                 ),
-              ),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 210,
-                child: DropdownButtonFormField<int>(
-                  initialValue: categoryId,
-                  decoration: const InputDecoration(labelText: 'Category'),
-                  items: [
-                    const DropdownMenuItem<int>(child: Text('All categories')),
-                    ...cats.map(
-                      (c) => DropdownMenuItem(value: c.id, child: Text(c.name)),
-                    ),
-                  ],
-                  onChanged: (v) {
-                    categoryId = v;
-                    load();
-                  },
+                SizedBox(
+                  width: narrow ? double.infinity : 210,
+                  child: DropdownButtonFormField<int>(
+                    initialValue: dropdownValueOrNull(categoryId, categoryIds),
+                    decoration: const InputDecoration(labelText: 'Category'),
+                    items: [
+                      const DropdownMenuItem<int>(
+                        child: Text('All categories'),
+                      ),
+                      ...cats.map(
+                        (c) =>
+                            DropdownMenuItem(value: c.id, child: Text(c.name)),
+                      ),
+                    ],
+                    onChanged: (v) {
+                      categoryId = v;
+                      load();
+                    },
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              SecondaryButton(
-                label: from == null ? 'Date' : '${from!.month}/${from!.day}',
-                icon: Icons.date_range,
-                onPressed: _dateFilter,
-              ),
-            ],
+                SecondaryButton(
+                  label: from == null ? 'Date' : '${from!.month}/${from!.day}',
+                  icon: Icons.date_range,
+                  onPressed: _dateFilter,
+                ),
+              ];
+              return narrow
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        filters[0],
+                        const SizedBox(height: 12),
+                        filters[1],
+                        const SizedBox(height: 12),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: filters[2],
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(child: filters[0]),
+                        const SizedBox(width: 12),
+                        filters[1],
+                        const SizedBox(width: 12),
+                        filters[2],
+                      ],
+                    );
+            },
           ),
           const SizedBox(height: 18),
-          Expanded(child: _body()),
+          Expanded(child: SingleChildScrollView(child: _body())),
         ],
       ),
     );
@@ -188,6 +213,8 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
     return AppCard(
       padding: EdgeInsets.zero,
       child: ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
         itemCount: rows.length,
         separatorBuilder: (_, _) =>
             const Divider(height: 1, color: AppTheme.border),
@@ -201,21 +228,35 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
             subtitle: Text(
               '${e.expenseDate.split('T').first}  •  ${e.description}',
             ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  tooltip: 'Edit expense',
-                  onPressed: () => _expenseDialog(e),
-                  icon: const Icon(Icons.edit_outlined),
-                ),
-                IconButton(
-                  tooltip: 'Delete expense',
-                  onPressed: () => _delete(e),
-                  icon: const Icon(Icons.delete_outline),
-                ),
-              ],
-            ),
+            trailing: MediaQuery.sizeOf(context).width < 600
+                ? PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'edit') _expenseDialog(e);
+                      if (value == 'delete') _delete(e);
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(value: 'edit', child: Text('Edit expense')),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Text('Delete expense'),
+                      ),
+                    ],
+                  )
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'Edit expense',
+                        onPressed: () => _expenseDialog(e),
+                        icon: const Icon(Icons.edit_outlined),
+                      ),
+                      IconButton(
+                        tooltip: 'Delete expense',
+                        onPressed: () => _delete(e),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ],
+                  ),
           );
         },
       ),
@@ -244,59 +285,61 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Expense categories'),
         content: SizedBox(
-          width: 380,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ...cats.map(
-                (c) => ListTile(
-                  title: Text(c.name),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        onPressed: () async {
-                          Navigator.pop(ctx);
-                          await _editCategory(c);
-                        },
-                        icon: const Icon(Icons.edit_outlined),
-                      ),
-                      IconButton(
-                        onPressed: () async {
-                          if (await showConfirmationDialog(
-                            context,
-                            title: 'Delete ${c.name}?',
-                            message:
-                                'This category can only be deleted if unused.',
-                          )) {
-                            try {
-                              await widget.repository.deleteCategory(c);
-                              if (ctx.mounted) Navigator.pop(ctx);
-                              await load();
-                            } on ExpenseCategoryInUseException {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'This category is used by an expense.',
+          width: responsiveDialogWidth(context, 380),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ...cats.map(
+                  (c) => ListTile(
+                    title: Text(c.name),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          onPressed: () async {
+                            Navigator.pop(ctx);
+                            await _editCategory(c);
+                          },
+                          icon: const Icon(Icons.edit_outlined),
+                        ),
+                        IconButton(
+                          onPressed: () async {
+                            if (await showConfirmationDialog(
+                              context,
+                              title: 'Delete ${c.name}?',
+                              message:
+                                  'This category can only be deleted if unused.',
+                            )) {
+                              try {
+                                await widget.repository.deleteCategory(c);
+                                if (ctx.mounted) Navigator.pop(ctx);
+                                await load();
+                              } on ExpenseCategoryInUseException {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'This category is used by an expense.',
+                                      ),
                                     ),
-                                  ),
-                                );
+                                  );
+                                }
                               }
                             }
-                          }
-                        },
-                        icon: const Icon(Icons.delete_outline),
-                      ),
-                    ],
+                          },
+                          icon: const Icon(Icons.delete_outline),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              TextField(
-                controller: name,
-                decoration: const InputDecoration(labelText: 'New category'),
-              ),
-            ],
+                TextField(
+                  controller: name,
+                  decoration: const InputDecoration(labelText: 'New category'),
+                ),
+              ],
+            ),
           ),
         ),
         actions: [
@@ -383,7 +426,13 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
     }
     final amount = TextEditingController(text: existing?.amount.toString());
     final desc = TextEditingController(text: existing?.description);
-    var selected = existing?.expenseCategoryId ?? cats.first.id!;
+    final categoryIds = cats
+        .map((category) => category.id)
+        .whereType<int>()
+        .toList();
+    var selected =
+        dropdownValueOrNull(existing?.expenseCategoryId, categoryIds) ??
+        categoryIds.first;
     final date = TextEditingController(
       text:
           existing?.expenseDate.split('T').first ??
@@ -397,43 +446,47 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
           title: Text(existing == null ? 'Add expense' : 'Edit expense'),
           content: Form(
             key: form,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<int>(
-                  initialValue: selected,
-                  items: cats
-                      .map(
-                        (c) =>
-                            DropdownMenuItem(value: c.id, child: Text(c.name)),
-                      )
-                      .toList(),
-                  onChanged: (v) => set(() => selected = v!),
-                  decoration: const InputDecoration(labelText: 'Category'),
-                ),
-                TextFormField(
-                  controller: amount,
-                  decoration: const InputDecoration(labelText: 'Amount'),
-                  validator: (v) =>
-                      double.tryParse(v ?? '') == null ||
-                          double.parse(v ?? '') <= 0
-                      ? 'Enter a valid amount.'
-                      : null,
-                ),
-                TextField(
-                  controller: desc,
-                  decoration: const InputDecoration(labelText: 'Description'),
-                ),
-                TextFormField(
-                  controller: date,
-                  decoration: const InputDecoration(
-                    labelText: 'Date (YYYY-MM-DD)',
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<int>(
+                    initialValue: dropdownValueOrNull(selected, categoryIds),
+                    items: cats
+                        .map(
+                          (c) => DropdownMenuItem(
+                            value: c.id,
+                            child: Text(c.name),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) => set(() => selected = v!),
+                    decoration: const InputDecoration(labelText: 'Category'),
                   ),
-                  validator: (value) => DateTime.tryParse(value ?? '') == null
-                      ? 'Enter a valid date.'
-                      : null,
-                ),
-              ],
+                  TextFormField(
+                    controller: amount,
+                    decoration: const InputDecoration(labelText: 'Amount'),
+                    validator: (v) =>
+                        double.tryParse(v ?? '') == null ||
+                            double.parse(v ?? '') <= 0
+                        ? 'Enter a valid amount.'
+                        : null,
+                  ),
+                  TextField(
+                    controller: desc,
+                    decoration: const InputDecoration(labelText: 'Description'),
+                  ),
+                  TextFormField(
+                    controller: date,
+                    decoration: const InputDecoration(
+                      labelText: 'Date (YYYY-MM-DD)',
+                    ),
+                    validator: (value) => DateTime.tryParse(value ?? '') == null
+                        ? 'Enter a valid date.'
+                        : null,
+                  ),
+                ],
+              ),
             ),
           ),
           actions: [

@@ -49,12 +49,19 @@ class _DealScreenState extends State<DealScreen> {
       );
     } else {
       body = ListView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
         itemCount: deals.length,
         itemBuilder: (context, index) => _tile(deals[index]),
       );
     }
     return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 20, 32, 32),
+      padding: EdgeInsets.fromLTRB(
+        responsivePageInset(context),
+        20,
+        responsivePageInset(context),
+        32,
+      ),
       child: Column(
         children: [
           SectionHeader(
@@ -67,7 +74,7 @@ class _DealScreenState extends State<DealScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          Expanded(child: body),
+          Expanded(child: SingleChildScrollView(child: body)),
         ],
       ),
     );
@@ -83,32 +90,58 @@ class _DealScreenState extends State<DealScreen> {
         subtitle: Text(
           'Savings: Rs. ${(deal.normalPrice - deal.dealPrice).toStringAsFixed(2)}',
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Rs. ${deal.dealPrice.toStringAsFixed(2)}'),
-            IconButton(
-              onPressed: () async {
-                await widget.repository.setActive(deal, !deal.isActive);
-                load();
-              },
-              icon: Icon(
-                deal.isActive
-                    ? Icons.visibility_off_outlined
-                    : Icons.visibility_outlined,
+        trailing: MediaQuery.sizeOf(context).width < 600
+            ? PopupMenuButton<String>(
+                onSelected: (value) async {
+                  if (value == 'toggle') {
+                    await widget.repository.setActive(deal, !deal.isActive);
+                    load();
+                  } else if (value == 'edit') {
+                    _edit(deal);
+                  } else {
+                    _delete(deal);
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'toggle',
+                    child: Text(
+                      deal.isActive ? 'Deactivate deal' : 'Activate deal',
+                    ),
+                  ),
+                  const PopupMenuItem(value: 'edit', child: Text('Edit deal')),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Text('Delete deal'),
+                  ),
+                ],
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Rs. ${deal.dealPrice.toStringAsFixed(2)}'),
+                  IconButton(
+                    onPressed: () async {
+                      await widget.repository.setActive(deal, !deal.isActive);
+                      load();
+                    },
+                    icon: Icon(
+                      deal.isActive
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => _edit(deal),
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                  IconButton(
+                    tooltip: 'Delete deal',
+                    onPressed: () => _delete(deal),
+                    icon: const Icon(Icons.delete_outline),
+                  ),
+                ],
               ),
-            ),
-            IconButton(
-              onPressed: () => _edit(deal),
-              icon: const Icon(Icons.edit_outlined),
-            ),
-            IconButton(
-              tooltip: 'Delete deal',
-              onPressed: () => _delete(deal),
-              icon: const Icon(Icons.delete_outline),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -140,7 +173,7 @@ class _DealScreenState extends State<DealScreen> {
           return AlertDialog(
             title: Text(existing == null ? 'Add deal' : 'Edit deal'),
             content: SizedBox(
-              width: 520,
+              width: responsiveDialogWidth(context, 520),
               child: SingleChildScrollView(
                 child: Column(
                   children: [

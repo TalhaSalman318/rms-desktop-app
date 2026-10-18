@@ -13,7 +13,6 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   DashboardStats? stats;
   List<Map<String, Object?>> recent = const [];
-  List<Map<String, Object?>> top = const [];
   bool loading = true;
   String? error;
   @override
@@ -30,7 +29,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       stats = await widget.repository.stats();
       recent = await widget.repository.recentOrders();
-      top = await widget.repository.topProducts();
     } catch (_) {
       error = 'Unable to load dashboard data.';
     }
@@ -42,7 +40,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return RefreshIndicator(
       onRefresh: refresh,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(32, 20, 32, 32),
+        padding: EdgeInsets.fromLTRB(
+          MediaQuery.sizeOf(context).width < 600 ? 16 : 32,
+          20,
+          MediaQuery.sizeOf(context).width < 600 ? 16 : 32,
+          32,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -64,21 +67,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _cards(stats!),
             const SizedBox(height: 24),
             _activity('Recent orders', recent, Icons.receipt_long_outlined),
-            const SizedBox(height: 16),
-            _activity('Top products', top, Icons.restaurant_menu_outlined),
           ],
         ),
       ),
     );
   }
 
-  Widget _cards(DashboardStats value) => GridView.count(
-    crossAxisCount: MediaQuery.sizeOf(context).width > 1050 ? 3 : 2,
-    crossAxisSpacing: 14,
-    mainAxisSpacing: 14,
-    childAspectRatio: 2.25,
-    shrinkWrap: true,
-    physics: const NeverScrollableScrollPhysics(),
+  Widget _cards(DashboardStats value) => ResponsiveStatGrid(
+    desktopColumns: 3,
     children: [
       StatCard(
         label: "Today's sales",
@@ -140,12 +136,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
             (row) => ListTile(
               contentPadding: EdgeInsets.zero,
               leading: Icon(icon, color: AppTheme.accent),
-              title: Text(row['name']?.toString() ?? '#${row['order_number']}'),
+              title: Text(
+                row['name']?.toString() ?? '#${row['order_number']}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               subtitle: Text(
                 row['payment_method']?.toString() ?? '${row['quantity']} units',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              trailing: Text(
-                'Rs. ${row['total_amount'] ?? row['revenue'] ?? 0}',
+              trailing: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'Rs. ${row['total_amount'] ?? row['revenue'] ?? 0}',
+                ),
               ),
             ),
           ),

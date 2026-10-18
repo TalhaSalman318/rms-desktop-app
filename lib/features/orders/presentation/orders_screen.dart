@@ -40,32 +40,31 @@ class _OrdersScreenState extends State<OrdersScreen> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 20, 32, 32),
+      padding: EdgeInsets.fromLTRB(
+        responsivePageInset(context),
+        20,
+        responsivePageInset(context),
+        32,
+      ),
       child: Column(
         children: [
           const SectionHeader(
             title: 'Orders History',
-            subtitle: 'Review every order recorded in SQLite.',
+            subtitle: 'Review every order recorded in MongoDB Atlas.',
           ),
           const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: SearchField(
-                  controller: search,
-                  hint: 'Search orders',
-                  onChanged: (_) => _load(),
-                ),
-              ),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 170,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final narrow = constraints.maxWidth < 600;
+              const statusOptions = ['Completed', 'Pending', 'Cancelled'];
+              final statusField = SizedBox(
+                width: narrow ? double.infinity : 170,
                 child: DropdownButtonFormField<String>(
-                  initialValue: status,
+                  initialValue: dropdownValueOrNull(status, statusOptions),
                   decoration: const InputDecoration(labelText: 'Status'),
                   items: [
                     const DropdownMenuItem<String>(child: Text('All statuses')),
-                    ...['Completed', 'Pending', 'Cancelled'].map(
+                    ...statusOptions.map(
                       (value) =>
                           DropdownMenuItem(value: value, child: Text(value)),
                     ),
@@ -75,11 +74,32 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     _load();
                   },
                 ),
-              ),
-            ],
+              );
+              final searchField = SearchField(
+                controller: search,
+                hint: 'Search orders',
+                onChanged: (_) => _load(),
+              );
+              return narrow
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        searchField,
+                        const SizedBox(height: 12),
+                        statusField,
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(child: searchField),
+                        const SizedBox(width: 12),
+                        statusField,
+                      ],
+                    );
+            },
           ),
           const SizedBox(height: 18),
-          Expanded(child: _body()),
+          SingleChildScrollView(child: _body()),
         ],
       ),
     );
@@ -101,6 +121,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
     return AppCard(
       padding: EdgeInsets.zero,
       child: ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
         itemCount: orders.length,
         separatorBuilder: (_, _) =>
             const Divider(height: 1, color: AppTheme.border),
@@ -122,22 +144,46 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   ? Colors.redAccent
                   : Colors.orangeAccent,
             ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Rs. ${order.totalAmount.toStringAsFixed(2)}'),
-                IconButton(
-                  tooltip: 'View order',
-                  onPressed: () => _details(order),
-                  icon: const Icon(Icons.visibility_outlined),
-                ),
-                if (order.status != 'Cancelled')
-                  IconButton(
-                    tooltip: 'Cancel order',
-                    onPressed: () => _cancel(order),
-                    icon: const Icon(Icons.cancel_outlined),
-                  ),
-              ],
+            trailing: LayoutBuilder(
+              builder: (context, constraints) {
+                final narrow = MediaQuery.sizeOf(context).width < 600;
+                if (narrow) {
+                  return PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'view') _details(order);
+                      if (value == 'cancel') _cancel(order);
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'view',
+                        child: Text('View order'),
+                      ),
+                      if (order.status != 'Cancelled')
+                        const PopupMenuItem(
+                          value: 'cancel',
+                          child: Text('Cancel order'),
+                        ),
+                    ],
+                  );
+                }
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Rs. ${order.totalAmount.toStringAsFixed(2)}'),
+                    IconButton(
+                      tooltip: 'View order',
+                      onPressed: () => _details(order),
+                      icon: const Icon(Icons.visibility_outlined),
+                    ),
+                    if (order.status != 'Cancelled')
+                      IconButton(
+                        tooltip: 'Cancel order',
+                        onPressed: () => _cancel(order),
+                        icon: const Icon(Icons.cancel_outlined),
+                      ),
+                  ],
+                );
+              },
             ),
           );
         },
@@ -153,7 +199,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       builder: (context) => AlertDialog(
         title: Text('Order #${order.orderNumber}'),
         content: SizedBox(
-          width: 470,
+          width: responsiveDialogWidth(context, 470),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,

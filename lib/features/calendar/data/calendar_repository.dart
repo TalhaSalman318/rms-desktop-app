@@ -1,4 +1,4 @@
-import '../../../core/database/database_service.dart';
+import '../../../core/services/api_client.dart';
 
 class CalendarDay {
   const CalendarDay({
@@ -21,38 +21,36 @@ class CalendarDetails {
 
 class CalendarRepository {
   CalendarRepository(this.db);
-  final DatabaseService db;
+  final ApiClient db;
   Future<Map<DateTime, CalendarDay>> month(DateTime month) async {
     final start = DateTime(month.year, month.month),
         end = DateTime(month.year, month.month + 1);
-    final rows = await db.open().then(
-      (d) => d.rawQuery(
-        "SELECT substr(order_date,1,10) AS day,COUNT(*) AS orders,COALESCE(SUM(total_amount),0) AS sales FROM orders WHERE status='Completed' AND order_date>=? AND order_date<? GROUP BY substr(order_date,1,10)",
-        [start.toIso8601String(), end.toIso8601String()],
-      ),
-    );
-    final expenses = await db.open().then(
-      (d) => d.rawQuery(
-        'SELECT substr(expense_date,1,10) AS day,COALESCE(SUM(amount),0) AS expenses FROM expenses WHERE expense_date>=? AND expense_date<? GROUP BY substr(expense_date,1,10)',
-        [start.toIso8601String(), end.toIso8601String()],
-      ),
-    );
+    final data = await db.analyticsMap('calendar', {
+      'from': start.toIso8601String(),
+      'to': end.toIso8601String(),
+    });
+    final rows = (data['orders'] as List? ?? const []).cast<Map>();
+    final expenses = (data['expenses'] as List? ?? const []).cast<Map>();
     final result = <DateTime, CalendarDay>{};
     for (final row in rows) {
-      final date = DateTime.parse(row['day'] as String);
+      final date = DateTime.parse(
+        (row['order_date'] as String).substring(0, 10),
+      );
       result[date] = CalendarDay(
-        orders: row['orders'] as int,
-        sales: (row['sales'] as num).toDouble(),
+        orders: 1,
+        sales: (row['total_amount'] as num).toDouble(),
         expenses: 0,
       );
     }
     for (final row in expenses) {
-      final date = DateTime.parse(row['day'] as String);
+      final date = DateTime.parse(
+        (row['expense_date'] as String).substring(0, 10),
+      );
       final old = result[date];
       result[date] = CalendarDay(
         orders: old?.orders ?? 0,
         sales: old?.sales ?? 0,
-        expenses: (row['expenses'] as num).toDouble(),
+        expenses: (row['amount'] as num).toDouble(),
       );
     }
     return result;
@@ -61,15 +59,18 @@ class CalendarRepository {
   Future<CalendarDetails> details(DateTime date) async {
     final start = DateTime(date.year, date.month, date.day);
     final end = start.add(const Duration(days: 1));
-    final database = await db.open();
-    final orders = await database.rawQuery(
-      "SELECT order_number,total_amount,payment_method,status FROM orders WHERE order_date >= ? AND order_date < ? ORDER BY order_date DESC",
-      [start.toIso8601String(), end.toIso8601String()],
-    );
-    final expenses = await database.rawQuery(
-      'SELECT ec.name, e.amount, e.description FROM expenses e JOIN expense_categories ec ON ec.id=e.expense_category_id WHERE e.expense_date >= ? AND e.expense_date < ? ORDER BY e.expense_date DESC',
-      [start.toIso8601String(), end.toIso8601String()],
-    );
+    final data = await db.analyticsMap('calendar', {
+      'from': start.toIso8601String(),
+      'to': end.toIso8601String(),
+    });
+    final orders = (data['orders'] as List? ?? const [])
+        .cast<Map>()
+        .map((e) => Map<String, Object?>.from(e))
+        .toList();
+    final expenses = (data['expenses'] as List? ?? const [])
+        .cast<Map>()
+        .map((e) => Map<String, Object?>.from(e))
+        .toList();
     return CalendarDetails(orders: orders, expenses: expenses);
   }
 }

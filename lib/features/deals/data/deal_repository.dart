@@ -1,26 +1,23 @@
-import '../../../core/database/database_service.dart';
+import '../../../core/services/api_client.dart';
 import '../../../data/models/database_models.dart';
 
 class DealRepository {
-  DealRepository(this._database);
-  final DatabaseService _database;
-  Future<List<Deal>> getDeals() async => (await _database.query(
-    'deals',
-    orderBy: 'name COLLATE NOCASE',
-  )).map(Deal.fromMap).toList();
-  Future<List<DealItem>> items(int id) async => (await _database.query(
-    'deal_items',
-    where: 'deal_id=?',
-    whereArgs: [id],
-  )).map(DealItem.fromMap).toList();
-  Future<void> setActive(Deal deal, bool active) => _database
-      .update(
-        'deals',
-        {'is_active': active ? 1 : 0},
-        where: 'id=?',
-        whereArgs: [deal.id],
-      )
-      .then((_) {});
+  DealRepository(this._api);
+  final ApiClient _api;
+  Future<List<Deal>> getDeals() async =>
+      (await _api.list('deals')).map(Deal.fromMap).toList();
+  Future<List<DealItem>> items(int id) async {
+    final row = await _api.get('deals', id);
+    final values = row['items'];
+    if (values is! List) return [];
+    return values
+        .cast<Map>()
+        .map((e) => DealItem.fromMap(Map<String, Object?>.from(e)))
+        .toList();
+  }
+
+  Future<void> setActive(Deal deal, bool active) async =>
+      _api.save('deals', {'is_active': active}, id: deal.id);
   Future<int> save(Deal deal, List<DealItem> items) async {
     final name = deal.name.trim();
     if (name.isEmpty) throw const DealValidationException('Enter a deal name.');
@@ -37,58 +34,18 @@ class DealRepository {
         'Select at least one product with a valid quantity.',
       );
     }
-    final duplicate = await _database.query(
-      'deals',
-      columns: ['id'],
-      where: deal.id == null
-          ? 'LOWER(name)=LOWER(?)'
-          : 'LOWER(name)=LOWER(?) AND id != ?',
-      whereArgs: deal.id == null ? [name] : [name, deal.id],
-      limit: 1,
-    );
-    if (duplicate.isNotEmpty) {
-      throw const DealValidationException(
-        'A deal with this name already exists.',
-      );
-    }
-    final products = await _database.query(
-      'products',
-      columns: ['id'],
-      where:
-          'id IN (${List.filled(items.length, '?').join(',')}) AND is_active=1',
-      whereArgs: items.map((item) => item.productId).toList(),
-    );
-    if (products.length != items.map((item) => item.productId).toSet().length) {
-      throw const DealValidationException(
-        'All deal products must be active products.',
-      );
-    }
-    return _database.transaction((tx) async {
-      final values = deal.toMap()
-        ..remove('id')
-        ..remove('created_at');
-      values['name'] = name;
-      final id = deal.id == null ? await tx.insert('deals', values) : deal.id!;
-      if (deal.id != null) {
-        await tx.update('deals', values, where: 'id=?', whereArgs: [id]);
-      }
-      if (deal.id != null) {
-        await tx.delete('deal_items', where: 'deal_id=?', whereArgs: [id]);
-      }
-      for (final item in items) {
-        await tx.insert('deal_items', {
-          'deal_id': id,
-          'product_id': item.productId,
-          'quantity': item.quantity,
-        });
-      }
-      return id;
-    });
+    final values = <String, dynamic>{...deal.toMap()};
+    values.remove('id');
+    values.remove('created_at');
+    values['name'] = name;
+    values['items'] = items.map((item) => item.toMap()).toList();
+    final row = await _api.save('deals', values, id: deal.id);
+    return row['id'] as int;
   }
 
   Future<void> delete(Deal deal) async {
     if (deal.id == null) return;
-    await _database.delete('deals', where: 'id=?', whereArgs: [deal.id]);
+    await _api.remove('deals', deal.id!);
   }
 }
 

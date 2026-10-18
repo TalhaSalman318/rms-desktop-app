@@ -15,7 +15,8 @@ class PosController extends ChangeNotifier {
   String search = '';
   int? categoryId;
   String paymentMethod = 'Cash';
-  String status = 'Completed';
+  String orderType = 'Dine-In';
+  double deliveryCharges = 0;
   double discount = 0;
   bool loading = false;
   String? error;
@@ -24,14 +25,21 @@ class PosController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setStatus(String value) {
-    status = value;
+  void setOrderType(String value) {
+    orderType = value;
+    if (value != 'Delivery') deliveryCharges = 0;
+    notifyListeners();
+  }
+
+  void setDeliveryCharges(double value) {
+    deliveryCharges = value < 0 ? 0 : value;
     notifyListeners();
   }
 
   double get subtotal => cart.fold(0, (sum, line) => sum + line.subtotal);
-  double get total =>
-      (subtotal - discount).clamp(0, double.infinity).toDouble();
+  double get total => (subtotal - discount + deliveryCharges)
+      .clamp(0, double.infinity)
+      .toDouble();
   Future<void> load({String? search, int? categoryId}) async {
     if (search != null) this.search = search;
     this.categoryId = categoryId;
@@ -98,6 +106,8 @@ class PosController extends ChangeNotifier {
   void clear() {
     cart.clear();
     discount = 0;
+    orderType = 'Dine-In';
+    deliveryCharges = 0;
     notifyListeners();
   }
 
@@ -108,6 +118,8 @@ class PosController extends ChangeNotifier {
     search = '';
     categoryId = null;
     discount = 0;
+    orderType = 'Dine-In';
+    deliveryCharges = 0;
     error = null;
     notifyListeners();
   }
@@ -131,7 +143,8 @@ class PosController extends ChangeNotifier {
         lines: List.of(cart),
         discount: discount,
         paymentMethod: paymentMethod,
-        status: status,
+        orderType: orderType,
+        deliveryCharges: deliveryCharges,
       );
       clear();
       return number;

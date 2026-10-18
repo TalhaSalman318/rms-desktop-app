@@ -1,0 +1,12 @@
+const express = require('express');
+const { create, items, next } = require('../controllers/orderController');
+const { list, get, save, remove } = require('../controllers/resourceController');
+const router = express.Router();
+router.get('/next-number', next);
+router.get('/', list('orders'));
+router.get('/:id/items', items);
+router.get('/:id', get('orders'));
+router.post('/', create);
+router.put('/:id', save('orders'));
+router.delete('/:id', remove('orders'));
+module.exports = router;
